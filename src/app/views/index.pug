@@ -25,11 +25,11 @@ html
       .electerm-logo-bg {
         background: transparent 50% 50% no-repeat url("./images/electerm-watermark.png");
       }
-      .morph-shape {
-        background: linear-gradient(45deg, #08c 0%, #09c 100%);
-        animation: morph 8s ease-in-out infinite;
-        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-        transition: all 1s ease-in-out;
+      #content-loading .morph-shape {
+        background: #202020;
+        animation: none;
+        border-radius: 12px;
+        transition: none;
         z-index: 5;
       }
     - if (!isDev)
@@ -66,4 +66,3 @@ html
       //- script(src='/external/react-dom.production.min.js?' + version)
       - var url = src=cdn + '/js/basic-' + version + '.js'
       script(src=url, type='module')
-
