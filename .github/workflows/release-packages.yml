@@ -54,6 +54,7 @@ jobs:
           npm run build
       - name: Unit and real loopback browser/tunnel checks
         run: |
+          npx playwright install --with-deps chromium
           npm run test3
           node --test test/packaged/web-smoke.js test/packaged/managed-web.js
       - name: Stage and pack immutable release artifacts
@@ -78,7 +79,8 @@ jobs:
           NPM_REGISTRY_URL: ${{ secrets.NPM_REGISTRY_URL }}
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::NPM_TOKEN is required"; exit 1; fi
-          if [ "${NPM_REGISTRY_URL:-https://npm.anubis.locker/}" != "https://npm.anubis.locker/" ]; then
+          registry="${NPM_REGISTRY_URL:-https://npm.anubis.locker/}"
+          if [ "${registry%/}" != "https://npm.anubis.locker" ]; then
             echo "::error::Only the Anubis registry is supported"; exit 1
           fi
           node --input-type=module <<'JS'
