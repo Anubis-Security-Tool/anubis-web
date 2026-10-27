@@ -42,17 +42,28 @@ test('locally built web application authenticates, renders shared UI and execute
   t.after(async () => {
     if (browser) await browser.close()
     if (vnc) await vnc.close()
-    if (server.exitCode === null) {
+    let forced = false
+    if (server.exitCode === null && server.signalCode === null) {
       const exited = once(server, 'exit')
-      server.kill()
-      await exited
+      const deadline = setTimeout(() => {
+        forced = true
+        server.kill('SIGKILL')
+      }, 3000)
+      deadline.unref()
+      try {
+        server.kill()
+        await exited
+      } finally {
+        clearTimeout(deadline)
+      }
     }
     rmSync(data, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+    assert.equal(forced, false, 'Fixture Web server must stop without a forced kill')
   })
   const url = `http://127.0.0.1:${port}`
   let ready = false
   for (let attempt = 0; attempt < 100; attempt++) {
-    if (server.exitCode !== null) throw new Error(`Web server exited: ${output}`)
+    if (server.exitCode !== null || server.signalCode !== null) throw new Error(`Web server exited: ${output}`)
     try {
       const response = await fetch(url)
       assert.equal(response.status, 200, output)

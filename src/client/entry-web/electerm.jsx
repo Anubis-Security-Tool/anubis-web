@@ -3,7 +3,10 @@ import '../../../node_modules/antd/dist/reset.css'
 // import '../electerm-react/common/trzsz'
 import '@fontsource/maple-mono/index.css'
 import Main from '../web-components/web-main'
+import { loadAttachAddon } from '../electerm-react/components/terminal/xterm-loader.js'
 
+// Do not lose the first socket message while the attach module is being imported.
+await loadAttachAddon()
 const rootElement = document.getElementById('container')
 const root = createRoot(rootElement)
 

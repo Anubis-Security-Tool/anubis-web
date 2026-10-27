@@ -83,6 +83,8 @@ class TerminalLocal extends TerminalBase {
       // The OpenConsole conpty.dll does not have this problem.
       useConptyDll: true
     })
+    // Keep fast shell startup output until the terminal WebSocket is listening.
+    this.term.pause()
     this.term.termType = termType
     globalState.setSession(this.pid, this)
     return Promise.resolve(this)
@@ -94,6 +96,7 @@ class TerminalLocal extends TerminalBase {
 
   on (event, cb) {
     this.term.on(event, cb)
+    if (event === 'data') this.term.resume()
   }
 
   off (event, cb) {
@@ -119,7 +122,10 @@ class TerminalLocal extends TerminalBase {
     if (this.sessionLogger) {
       this.sessionLogger.destroy()
     }
-    this.term && this.term.kill()
+    if (this.term) {
+      this.term.resume()
+      this.term.kill()
+    }
     this.onEndConn()
   }
 }

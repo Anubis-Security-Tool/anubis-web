@@ -85,6 +85,10 @@ test('published gateway requires approval and operator session before independen
       local.closeAllConnections()
       await new Promise(resolve => local.close(resolve))
     }
+    const { default: globalState } = await appModule('server', 'global-state.js')
+    for (const session of Object.values(globalState.data)) {
+      if (typeof session.kill === 'function') session.kill()
+    }
     const { loadDb } = await appModule('db', 'index.js')
     const db = await loadDb({})
     db.close()
