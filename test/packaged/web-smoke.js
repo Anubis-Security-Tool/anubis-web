@@ -94,7 +94,8 @@ test('locally built web application authenticates, renders shared UI and execute
   assert.equal(sync.autoSync, true)
   assert.equal(sync.cloudApiUrl, 'https://sync.anubis.locker/api/sync')
   assert.equal(await page.locator('.sidebar').evaluate(node => Math.round(node.getBoundingClientRect().width)), 248)
-  await page.locator('.control-icon-wrap[title="Setting"]').click()
+  const settingsLabel = await page.evaluate(() => window.translate('setting'))
+  await page.getByRole('button', { name: settingsLabel, exact: true }).click()
   for (const name of ['bookmarks', 'setting', 'terminalThemes', 'quickCommands', 'triggers', 'profiles', 'widgets']) {
     await page.locator(`.setting-tabs [data-node-key="${name}"] [role="tab"]`).click()
     await page.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
