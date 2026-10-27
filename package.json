@@ -35,9 +35,9 @@
     "stage-standalone": "node build/bin/standalone.js"
   },
   "license": "MIT",
-  "languageRepo": "https://github.com/Anubis-Security-Tool/anubis-locales",
-  "privacyNoticeLink": "https://docs.anubis.locker/privacy-notice",
-  "knownIssuesLink": "https://docs.anubis.locker/known-issues",
+  "languageRepo": "https://github.com/Anubis-Security-Tool/anubis-packages/tree/main/locales",
+  "privacyNoticeLink": "https://docs.anubis.locker/wiki/privacy-notice",
+  "knownIssuesLink": "https://docs.anubis.locker/wiki/Know-issues",
   "sponsorLink": "https://anubis.locker/sponsor/",
   "repository": {
     "type": "git",

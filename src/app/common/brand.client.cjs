@@ -9,18 +9,17 @@
  * src/client/common/constants.js.
  *
  * Do not put secrets here: the whole object is shipped to the renderer.
- * NOTE: ".locker" is not an IANA TLD; change `domain` here when a real one is used.
  */
 
 const domain = 'anubis.locker'
-const org = 'ai-security-tool'
+const org = 'Anubis-Security-Tool'
 const id = 'anubis'
 const name = 'Anubis-Security-Tool'
 
 const site = `https://${domain}`
 const subdomain = (s) => `https://${s}.${domain}`
-const repoUrl = `https://github.com/${org}/${id}`
-const wikiBase = `${subdomain('docs')}/wiki`
+const repoUrl = `https://github.com/${org}/anubis-web`
+const wikiBase = `https://github.com/${org}/${id}/wiki`
 
 const wikiPages = {
   sshTunnel: 'How-to-use-ssh-tunnel',
@@ -116,14 +115,14 @@ const brand = {
 
   repo: {
     owner: org,
-    name: id,
+    name: 'anubis-web',
     url: repoUrl,
     issues: `${repoUrl}/issues`,
     newIssue: `${repoUrl}/issues/new`,
     releases: `${repoUrl}/releases`,
     discussions: `${repoUrl}/discussions`,
     homepage: site,
-    localesEdit: `https://github.com/${org}/${id}-locales/edit/master/locales`
+    localesEdit: `https://github.com/${org}/anubis-packages/edit/main/locales/dist/cjs`
   },
 
   docs: {

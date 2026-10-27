@@ -58,9 +58,9 @@ export const brand = {
       discussions: `${repoUrl}/discussions`,
       newDiscussion: `${repoUrl}/discussions/new`,
       releases: `${repoUrl}/releases`,
-      wiki: `${repoUrl}/wiki`,
+      wiki: `${gitHost}/${org}/anubis/wiki`,
       docker: `${gitHost}/${org}/web-docker`,
-      locales: `${gitHost}/${org}/anubis-locales`,
+      locales: `${gitHost}/${org}/anubis-packages/tree/main/locales`,
       desktop: `${gitHost}/${org}/anubis`
     }
   },
