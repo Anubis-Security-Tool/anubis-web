@@ -92,6 +92,14 @@ test('browser asset staging requires fonts and WASM instead of publishing an inc
   await assert.rejects(access(join(root, 'dist', `browser-assets-package-${version}`)), { code: 'ENOENT' })
 })
 
+test('new renderer releases cannot omit publisher-bound provenance or an accepted source commit', async t => {
+  const { root, file, installed } = await fixture(t)
+  await file('package.json', JSON.stringify({ type: 'module', devDependencies: { [renderer]: '5.7.5' } }))
+  await file(join(installed, 'package.json'), JSON.stringify({ name: renderer, version: '5.7.5' }))
+  await assert.rejects(stageBrowserAssets({ root }), /publisher-bound source provenance/)
+  await assert.rejects(access(join(root, 'dist', 'browser-assets-package-5.7.5')), { code: 'ENOENT' })
+})
+
 test('isolated build refuses stale copied renderer source before invoking compilation', async t => {
   const { root, file } = await fixture(t)
   await file(join('src', 'client', 'electerm-react', 'entry.jsx'), 'outdated renderer')

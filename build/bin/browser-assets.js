@@ -25,7 +25,9 @@ export async function stageBrowserAssets ({
   }
   const installed = resolve(root, 'node_modules', '@ai-security-tool', 'electerm-react')
   const renderer = JSON.parse(await readFile(resolve(installed, 'package.json'), 'utf8'))
-  if (renderer.anubisSource || version === '5.7.4') {
+  const [major, minor, patch] = version.split('.').map(Number)
+  const provenanceRequired = major > 5 || (major === 5 && (minor > 7 || (minor === 7 && patch >= 4)))
+  if (renderer.anubisSource || provenanceRequired) {
     await verifyRendererSource(installed, renderer, sourceCommit)
   }
   const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'))

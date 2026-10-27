@@ -10,12 +10,12 @@ English: [README.md](README.md)
 
 ## 快速开始
 
-Release target: Web and renderer `5.7.4`, Node.js 24+. Publication and deployment
+Release target: Web and renderer `5.7.5`, Node.js 24+. Publication and deployment
 are separate operations. Use the versioned npm command only after publication;
 see the [English source-install instructions](README.md#build-and-install-from-source).
 
 ```bash
-npm install --global anubis-web@5.7.4 --registry=https://npm.anubis.locker/
+npm install --global anubis-web@5.7.5 --registry=https://npm.anubis.locker/
 anubis-web
 ```
 
