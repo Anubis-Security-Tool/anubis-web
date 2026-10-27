@@ -55,7 +55,11 @@ jobs:
           npm run build
       - name: Install real browser prerequisites
         timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        run: |
+          test -f /etc/apt/apt-mirrors.txt
+          printf 'https://archive.ubuntu.com/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          printf 'Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99-anubis-ci-network >/dev/null
+          npx playwright install --with-deps chromium
       - name: Unit checks
         timeout-minutes: 3
         run: npm run test3
@@ -110,5 +114,5 @@ jobs:
           writeFileSync('release-artifacts/publish-list.txt', pending.join('\n') + (pending.length ? '\n' : ''))
           JS
           while IFS= read -r artifact; do
-            npm publish "$artifact" --ignore-scripts --registry=https://npm.anubis.locker/
+            npm publish "./$artifact" --ignore-scripts --registry=https://npm.anubis.locker/
           done < release-artifacts/publish-list.txt
