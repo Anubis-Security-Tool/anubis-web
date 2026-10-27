@@ -346,6 +346,18 @@ registry integrity and upstream project commit prove that the same project
 license applies. This bounded relation is recorded in the inventory and does
 not permit another version, integrity or an unrelated missing license.
 
+Vite also emits `browser-dependencies.json` from its actual module graph,
+containing only normalized dependency identities, never local filesystem paths.
+The notice inventory preserves that evidence and records both bundled use and
+the locked production/runtime classification. GPL/LGPL/MPL preferred sources
+are required for runtime dependencies or code present in the browser graph,
+including the dev-dependency noVNC and SPICE libraries. Build-only compilers
+such as Lightning CSS retain their original notices and metadata; their native
+binaries/code are not shipped merely because the generated CSS is shipped.
+Missing bundle evidence or a classification that contradicts it fails the gate.
+The existing Vite/copy/collector sequence also supplies this evidence to native
+source builds using their own installation root and lock.
+
 The asset manifest includes this inventory and every preserved file, so neither
 Web packaging nor browser-asset staging can silently discard legal documents.
 Build, staging and prepack gates from `5.7.6` onward reject missing, modified or
@@ -355,6 +367,8 @@ the preserved originals without changing server behavior. This does not rewrite 
 Before upload or publication, CI reads both actual `npm pack` archives and
 verifies every asset and preserved original against the shared asset manifest;
 source-tree checks alone cannot hide files omitted by packaging filters.
+The actual archives must not contain copied `node_modules` trees or native
+`.node` compiler binaries.
 
 The manually dispatched **Web and browser-assets packages** workflow
 (`release-packages.yml`) accepts the full renderer source commit and defaults

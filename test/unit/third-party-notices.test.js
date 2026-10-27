@@ -12,6 +12,7 @@ import { verifyAssetArchive } from '../../build/bin/verify-release-archives.js'
 import { create } from 'tar'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { browserDependencies, dependencyPath } from '../../build/vite/browser-dependencies.js'
 
 const original = await readFile(new URL('../../LICENSE', import.meta.url))
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -38,6 +39,7 @@ async function fixture (t) {
   await file('node_modules/example/NOTICE', Buffer.from('Original project attribution\r\n'))
   await file('node_modules/example/README.md', '# Original upstream documentation\r\n')
   await file('node_modules/example/vendor/licenses/pako.txt', original)
+  await file('dist/assets/browser-dependencies.json', JSON.stringify({ format: 1, packages: ['node_modules/example'] }))
   return { root, assets: join(root, 'dist/assets'), file }
 }
 
@@ -187,6 +189,64 @@ test('copies the complete capsule/source with exact provenance and rejects a dif
   manifest.packages[0].registryIntegrity = 'sha512-' + Buffer.alloc(64, 2).toString('base64')
   await file(`${directory}/manifest.json`, JSON.stringify(manifest))
   await assert.rejects(collectThirdPartyNotices({ root, assets }), /differs from the accepted package/)
+})
+
+test('preferred-source requirements follow actual browser modules, not build-only compiler notices', async t => {
+  const context = await fixture(t)
+  const { root, assets, file } = context
+  await capsuleFixture(context)
+  const index = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  const item = index.packages[0]
+  item.license = 'MPL-2.0'
+  delete item.sourceArchives
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /preferred source is required/)
+  item.bundled = false
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /differs from the original build evidence/)
+  await file('dist/assets/browser-dependencies.json', JSON.stringify({ format: 1, packages: [] }))
+  const lock = JSON.parse(await readFile(join(root, 'package-lock.json')))
+  lock.packages['node_modules/example'].dev = true
+  await file('package-lock.json', JSON.stringify(lock))
+  const toolsOnly = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  toolsOnly.packages[0].license = 'MPL-2.0'
+  delete toolsOnly.packages[0].sourceArchives
+  await file('dist/assets/third-party/index.json', JSON.stringify(toolsOnly))
+  await verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true })
+  toolsOnly.packages[0].runtime = true
+  await file('dist/assets/third-party/index.json', JSON.stringify(toolsOnly))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /preferred source is required/)
+  await rm(join(assets, 'browser-dependencies.json'))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), { code: 'ENOENT' })
+  await assert.rejects(collectThirdPartyNotices({ root, assets, requireCompliance: true }), { code: 'ENOENT' })
+})
+
+test('actual bundle evidence records only normalized dependency identities, never local machine paths', () => {
+  assert.equal(dependencyPath('C:\\private-user\\app\\node_modules\\@novnc\\novnc\\core\\rfb.js'), 'node_modules/@novnc/novnc')
+  assert.equal(dependencyPath('/private-user/app/node_modules/outer/node_modules/inner/index.js?commonjs-proxy'), 'node_modules/outer/node_modules/inner')
+  assert.equal(dependencyPath('/private-user/app/src/client/main.js'), undefined)
+  const modules = ['/private-user/app/node_modules/novnc/core/rfb.js', '/private-user/app/node_modules/novnc/core/util.js', 'node_modules/external/index.js']
+  let output
+  browserDependencies().generateBundle.call({
+    getModuleIds: () => modules,
+    getModuleInfo: id => ({ isExternal: id.includes('/external/') }),
+    emitFile: asset => { output = asset }
+  })
+  assert.equal(output.fileName, 'browser-dependencies.json')
+  assert.deepEqual(JSON.parse(output.source), { format: 1, packages: ['node_modules/novnc'] })
+  assert.equal(output.source.includes('private-user'), false)
+})
+
+test('actual browser archive rejects copied native build-tool binaries', async t => {
+  const { root, file } = await fixture(t)
+  await file('native-stage/package/assets/compiler.node', 'native build-tool fixture')
+  const archive = join(root, 'native-compiler.tgz')
+  await create({ gzip: true, cwd: join(root, 'native-stage'), file: archive }, ['package'])
+  await assert.rejects(verifyAssetArchive({
+    file: archive,
+    prefix: 'assets',
+    files: { 'compiler.node': hash(Buffer.from('native build-tool fixture')) }
+  }), /Build-time native modules must not be copied/)
 })
 
 test('records an explicit upstream declaration-only exception without fabricating a grant', async t => {

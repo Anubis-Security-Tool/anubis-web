@@ -132,6 +132,21 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
     files[filename] = hash
     return filename
   }
+  let bundleDependencies
+  let bundled
+  try {
+    const bytes = await readFile(resolve(assets, 'browser-dependencies.json'))
+    const evidence = JSON.parse(bytes)
+    if (evidence.format !== 1 || !Array.isArray(evidence.packages) ||
+        evidence.packages.some(path => typeof path !== 'string' || !lock.packages[path]) ||
+        new Set(evidence.packages).size !== evidence.packages.length) {
+      throw new Error('Invalid compiled browser dependency evidence')
+    }
+    bundled = new Set(evidence.packages)
+    bundleDependencies = save(bytes, 'PACKAGE')
+  } catch (error) {
+    if (error.code !== 'ENOENT' || requireCompliance) throw error
+  }
   const preserve = notice => ({ path: notice.path, file: save(notice.bytes, 'NOTICE') })
   const rootNotices = []
   for (const entry of await readdir(root, { withFileTypes: true })) {
@@ -227,6 +242,8 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
       integrity: lock.packages[key].integrity || null,
       coverage,
       complete,
+      runtime: lock.packages[key].dev !== true,
+      ...(bundled ? { bundled: bundled.has(key) } : {}),
       packageJson: save(metadata, 'PACKAGE'),
       notices: notices.map(notice => ({
         ...(notice.file ? { path: notice.path, file: notice.file } : preserve(notice)),
@@ -246,6 +263,7 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
     format: 1,
     root: { notices: rootNotices.map(preserve) },
     packages,
+    ...(bundleDependencies ? { bundleDependencies } : {}),
     ...(compliance
       ? {
           compliance: {

@@ -22,6 +22,9 @@ export async function verifyAssetArchive ({ file, prefix, files }) {
         return
       }
       seen.add(name)
+      if (name.startsWith('package/node_modules/') || /\.node$/i.test(name)) {
+        errors.push(`Build-time native modules must not be copied into browser/Web release archives: ${name}`)
+      }
       if (entry.type === 'Directory' || !name.startsWith(`package/${prefix}/`)) {
         entry.resume()
         return

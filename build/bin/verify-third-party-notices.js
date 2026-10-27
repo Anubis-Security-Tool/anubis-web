@@ -44,6 +44,23 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
   if (JSON.stringify(files) !== JSON.stringify(Object.fromEntries(Object.entries(index.files).sort()))) {
     throw new Error('Third-party notice file list is incomplete')
   }
+  let bundled
+  if (index.bundleDependencies) {
+    if (!index.files[index.bundleDependencies]) throw new Error('Compiled browser dependency evidence is missing')
+    const bytes = await readFile(resolve(directory, index.bundleDependencies))
+    if (!bytes.equals(await readFile(resolve(directory, '..', 'browser-dependencies.json')))) {
+      throw new Error('Compiled browser dependency evidence differs from the original asset')
+    }
+    const evidence = JSON.parse(bytes.toString('utf8'))
+    if (evidence.format !== 1 || !Array.isArray(evidence.packages) ||
+        evidence.packages.some(path => !index.packages.some(item => item.path === path)) ||
+        new Set(evidence.packages).size !== evidence.packages.length) {
+      throw new Error('Invalid compiled browser dependency evidence')
+    }
+    bundled = new Set(evidence.packages)
+  } else if (requireCompliance) {
+    throw new Error('Compiled browser dependency evidence is required')
+  }
   for (const item of [index.root, ...index.packages]) {
     if (!item || !Array.isArray(item.notices) || !item.notices.length ||
         item.notices.some(notice => !index.files[notice.file])) {
@@ -59,7 +76,13 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
         !index.files[item.sharedUpstream.registryIdentityProof])) {
       throw new Error('Shared upstream original notice provenance is missing')
     }
-    if (requireCompliance && /GPL|MPL/.test(item.license || '') && !item.sourceArchives?.length) {
+    if (item !== index.root && bundled && item.bundled !== bundled.has(item.path)) {
+      throw new Error('Compiled browser dependency coverage differs from the original build evidence')
+    }
+    if (requireCompliance && item !== index.root && typeof item.runtime !== 'boolean') {
+      throw new Error('Original runtime dependency classification is missing')
+    }
+    if (requireCompliance && (item.runtime || item.bundled) && /GPL|MPL/.test(item.license || '') && !item.sourceArchives?.length) {
       throw new Error(`Original third-party preferred source is required: ${item.name}`)
     }
   }

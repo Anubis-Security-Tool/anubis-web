@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { cwd, version, resourceDir } from './common.js'
 import { resolve } from 'path'
 import def from './def.js'
+import { browserDependencies } from './browser-dependencies.js'
 
 function buildInput () {
   return {
@@ -16,7 +17,8 @@ function buildInput () {
 export default defineConfig({
   plugins: [
     // commonjs(),
-    react({ include: /\.(mdx|js|jsx|ts|tsx|mjs)$/ })
+    react({ include: /\.(mdx|js|jsx|ts|tsx|mjs)$/ }),
+    browserDependencies()
   ],
   define: def,
   publicDir: false,
