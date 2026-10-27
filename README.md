@@ -18,7 +18,7 @@ prebuilt binaries are unavailable. On Windows use Visual Studio Build Tools
 with Desktop development with C++; on Debian/Ubuntu install
 `python3 make g++`; on macOS install the Xcode command-line tools.
 
-This source targets the coordinated **5.7.5** Web, renderer and browser-assets
+This source targets the coordinated **5.7.6** Web, renderer and browser-assets
 release. A source commit is not a publication or deployment. The exact renderer,
 managed SDK and resource pins in `package.json` and the matching lock must be
 available from the Anubis registry before a normal fresh source install.
@@ -30,11 +30,11 @@ ASAR, a session directory, or packages from a different release.
 Install the independent Web runtime **only from the Anubis registry**:
 
 ```bash
-npm install --global anubis-web@5.7.5 --registry=https://npm.anubis.locker/
+npm install --global anubis-web@5.7.6 --registry=https://npm.anubis.locker/
 anubis-web
 ```
 
-Use that versioned command only after the release owner publishes `5.7.5`.
+Use that versioned command only after the release owner publishes `5.7.6`.
 Check `anubis-web --version`; updating this repository does not change an
 already installed runtime or service.
 
@@ -76,7 +76,7 @@ For an explicit full-source pipeline, the root bootstrap may pass local npm
 tarballs produced from the accepted source checkouts:
 
 ```bash
-node web/scripts/install-source.js --renderer-package /absolute/path/electerm-react-5.7.5.tgz --sdk-package /absolute/path/managed-access-1.0.4.tgz --resource-package /absolute/path/resource-2.2.3.tgz
+node web/scripts/install-source.js --renderer-package /absolute/path/electerm-react-5.7.6.tgz --sdk-package /absolute/path/managed-access-1.0.4.tgz --resource-package /absolute/path/resource-2.2.3.tgz
 ```
 
 Tarball filenames are arbitrary; their internal `package/package.json` must
@@ -277,8 +277,8 @@ used by the vite dev server, the `@brand-res` alias and `build/bin/copy.js`.
 ## Shared UI and local verification
 
 Desktop and Web use the same client sources, published as
-`@ai-security-tool/electerm-react`. Web `5.7.5` and its browser-assets package
-must use the exact accepted `5.7.5` renderer, not a mutable sibling Desktop
+`@ai-security-tool/electerm-react`. Web `5.7.6` and its browser-assets package
+must use the exact accepted `5.7.6` renderer, not a mutable sibling Desktop
 checkout. Automatic sync is enabled by default
 against `https://sync.anubis.locker/api/sync`; account credentials are still
 required before data is uploaded.
