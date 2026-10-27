@@ -2,7 +2,7 @@
 
 基于浏览器的终端 / SSH / SFTP / RDP / VNC 客户端，支持独立运行和经管理员批准的受控访问。品牌配置见 `src/app/common/brand.config.js`。
 
-[网站](https://anubis.locker) · [Desktop](https://github.com/Anubis-Locker/anubis) · [受控访问组件](https://github.com/Anubis-Locker/anubis-managed-access)
+[网站](https://anubis.locker) · [Desktop](https://github.com/Anubis-Security-Tool/anubis) · [受控访问组件](https://github.com/Anubis-Security-Tool/anubis-managed-access)
 
 保留 MIT 原始版权和署名，包括 © ZHAO Xudong，见 [LICENSE](LICENSE)。
 
@@ -10,10 +10,12 @@ English: [README.md](README.md)
 
 ## 快速开始
 
-需要 Node.js 24 或更新版本。公开 Web CLI 为 `5.6.12`；当前 `5.7.3` 源码候选不代表该 npm 包已更新，也不代表已安装的服务通过验收。
+Release target: Web and renderer `5.7.4`, Node.js 24+. Publication and deployment
+are separate operations. Use the versioned npm command only after publication;
+see the [English source-install instructions](README.md#build-and-install-from-source).
 
 ```bash
-npm install --global anubis-web@5.6.12 --registry=https://npm.anubis.locker/
+npm install --global anubis-web@5.7.4 --registry=https://npm.anubis.locker/
 anubis-web
 ```
 
@@ -24,18 +26,16 @@ CLI 默认连接 `https://api.anubis.locker` 注册设备，并在私有目录�
 需要 git 和编译工具。脚本使用自己的仓库，生成强 `SERVER_SECRET` / `SERVER_PASS`，保留现有 `.env`：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Anubis-Locker/anubis-web/main/scripts/one-line-web.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Anubis-Security-Tool/anubis-web/main/scripts/one-line-web.sh | bash
 # Windows：下载并运行 scripts\one-line-web.bat
 ```
 
 手动构建：
 
 ```bash
-git clone https://github.com/Anubis-Locker/anubis-web.git
+git clone https://github.com/Anubis-Security-Tool/anubis-web.git
 cd anubis-web
-npm install --legacy-peer-deps --registry=https://npm.anubis.locker/
-npm run setup-managed
-npm run build
+node scripts/install-source.js
 npm run managed
 ```
 
@@ -44,7 +44,7 @@ npm run managed
 ## Docker
 
 ```bash
-cp .sample.env .env
+npm run setup-managed
 docker compose up -d --build   # web + nginx,http://127.0.0.1:8080
 ```
 

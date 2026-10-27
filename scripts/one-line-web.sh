@@ -2,14 +2,14 @@
 # One-line installer for Anubis-Security-Tool web (build from source).
 #   curl -fsSL <your-host>/scripts/one-line-web.sh | bash
 # Override with env vars:
-#   ANUBIS_REPO_URL  git url   (default: https://github.com/Anubis-Locker/anubis-web.git)
+#   ANUBIS_REPO_URL  git url   (default: https://github.com/Anubis-Security-Tool/anubis-web.git)
 #   ANUBIS_REF       branch/tag to checkout (default: repo default branch)
 #   ANUBIS_DIR       target dir (default: ./anubis-web)
 #   ANUBIS_MANAGED_URL gateway origin (default: https://api.anubis.locker)
 #   ANUBIS_MANAGED_ACCESS=0 explicit standalone install (default: managed)
 set -Eeuo pipefail
 
-REPO_URL="${ANUBIS_REPO_URL:-https://github.com/Anubis-Locker/anubis-web.git}"
+REPO_URL="${ANUBIS_REPO_URL:-https://github.com/Anubis-Security-Tool/anubis-web.git}"
 REF="${ANUBIS_REF:-}"
 TARGET_DIR="${ANUBIS_DIR:-anubis-web}"
 MIN_NODE_MAJOR=24
@@ -33,13 +33,16 @@ if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1; then
   log "  Debian/Ubuntu: sudo apt install -y make python3 g++ build-essential"
 fi
 
-if [ -d "${TARGET_DIR}/.git" ]; then
+if [ -e "${TARGET_DIR}/.git" ]; then
+  git -C "${TARGET_DIR}" diff --quiet
+  git -C "${TARGET_DIR}" diff --cached --quiet
   log "updating existing checkout in ${TARGET_DIR}"
   git -C "${TARGET_DIR}" fetch --tags --prune origin
   if [ -n "${REF}" ]; then
     git -C "${TARGET_DIR}" checkout "${REF}"
+  else
+    git -C "${TARGET_DIR}" pull --ff-only
   fi
-  git -C "${TARGET_DIR}" pull --ff-only || log "warning: could not fast-forward (detached ref?), continuing"
 elif [ -e "${TARGET_DIR}" ]; then
   die "${TARGET_DIR} exists and is not a git checkout; set ANUBIS_DIR to another path."
 else
@@ -53,13 +56,7 @@ fi
 
 cd "${TARGET_DIR}"
 
-node scripts/configure-managed.js
-
-log "installing dependencies"
-export NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-https://npm.anubis.locker/}"
-npm install --legacy-peer-deps
-log "building"
-npm run build
+node scripts/install-source.js
 
 log "done. Start with:  cd ${TARGET_DIR} && npm run managed   (local: http://127.0.0.1:5577)"
 log "Web login credentials are stored in .env; the gateway also requires administrator approval and browser login."

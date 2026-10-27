@@ -7,13 +7,13 @@ body:
         Thank you for reporting an issue.
 
         This issue tracker is for bugs and issues found within electerm-web.
-        If you require more general support please start a discussion on our discussion board https://github.com/ai-security-tool/web/discussions
+        If you require more general support please start a discussion on our discussion board https://github.com/Anubis-Security-Tool/anubis-web/discussions
 
         Please fill in as much of the form below as you're able.
 
-        Before continue, make sure you are using the latest release: check https://github.com/ai-security-tool/web/releases for latest release, also please
+        Before continue, make sure you are using the latest release: check https://github.com/Anubis-Security-Tool/anubis-web/releases for latest release, also please
 
-        仅用来追踪bug, 如果有其他的讨论请移步讨论区 https://github.com/ai-security-tool/web/discussions, 请务必确保问题是基于最新版本: https://github.com/ai-security-tool/web/releases
+        仅用来追踪bug, 如果有其他的讨论请移步讨论区 https://github.com/Anubis-Security-Tool/anubis-web/discussions, 请务必确保问题是基于最新版本: https://github.com/Anubis-Security-Tool/anubis-web/releases
 
   - type: input
     attributes:

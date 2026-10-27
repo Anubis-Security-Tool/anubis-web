@@ -5,26 +5,10 @@ import { execFileSync } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { treeManifest, treeHash } from '../../src/app/common/asset-manifest.js'
 import { verifyProductionAssets } from '../../src/app/lib/production-assets.js'
+import { ownRegistryLock } from './registry-lock.js'
 
 const registry = 'https://npm.anubis.locker/'
 const rendererName = '@ai-security-tool/electerm-react'
-
-function ownRegistryLock (value) {
-  if (!value || typeof value !== 'object') return value
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === 'resolved') {
-      const url = new URL(entry)
-      if (!['https://registry.npmjs.org', 'https://registry.npmmirror.com', new URL(registry).origin].includes(url.origin) ||
-          url.username || url.password || url.search || url.hash || !url.pathname.endsWith('.tgz')) {
-        throw new Error('Standalone dependency lock contains an unsupported package source')
-      }
-      value[key] = new URL(url.pathname, registry).href
-    } else {
-      ownRegistryLock(entry)
-    }
-  }
-  return value
-}
 
 export async function stageStandalone ({ root = process.cwd(), assetsPackage, sourceCommit }) {
   if (!/^[0-9a-f]{40}$/.test(sourceCommit || '')) throw new Error('Standalone staging requires the full Web source commit')

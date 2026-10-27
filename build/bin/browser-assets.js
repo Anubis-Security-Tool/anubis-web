@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process'
 import { promisify, parseArgs } from 'node:util'
 import { resolveBrandResDir } from '../../src/app/common/brand-res.js'
 import { treeManifest, treeHash } from '../../src/app/common/asset-manifest.js'
+import { verifyRendererSource } from './renderer-source.js'
 
 const run = promisify(execFile)
 const rendererName = '@ai-security-tool/electerm-react'
@@ -24,6 +25,9 @@ export async function stageBrowserAssets ({
   }
   const installed = resolve(root, 'node_modules', '@ai-security-tool', 'electerm-react')
   const renderer = JSON.parse(await readFile(resolve(installed, 'package.json'), 'utf8'))
+  if (renderer.anubisSource || version === '5.7.4') {
+    await verifyRendererSource(installed, renderer, sourceCommit)
+  }
   const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'))
   const locked = lock.packages[`node_modules/${rendererName}`]
   if (renderer.name !== rendererName || renderer.version !== version || locked?.version !== version) {
@@ -59,7 +63,7 @@ export async function stageBrowserAssets ({
     if (error.code !== 'ENOENT') throw error
   }
   let assets = resolve(root, 'dist', 'assets')
-  if (build) {
+  if (build || renderer.anubisSource) {
     const copied = await treeManifest(resolve(root, 'src', 'client', 'electerm-react'))
     if (treeHash(copied) !== rendererSourceHash) {
       throw new Error('Copied renderer source differs from the installed immutable package; run the source install hook')
@@ -70,6 +74,8 @@ export async function stageBrowserAssets ({
         throw new Error('Copied shared modules differ from the installed immutable package; run the source install hook')
       }
     }
+  }
+  if (build) {
     await mkdir(resolve(root, 'dist'), { recursive: true })
     const output = await mkdtemp(resolve(root, 'dist', `browser-assets-build-${version}-`))
     assets = resolve(output, 'assets')
@@ -108,6 +114,7 @@ export async function stageBrowserAssets ({
       version,
       integrity: locked.integrity,
       sourceTreeSha256: rendererSourceHash,
+      ...(renderer.anubisSource ? { provenance: renderer.anubisSource } : {}),
       ...(sharedSources ? { sharedSources: { treeSha256: treeHash(sharedSources), files: sharedSources } } : {}),
       ...(sourceCommit ? { sourceCommit } : {})
     },
@@ -124,7 +131,7 @@ export async function stageBrowserAssets ({
     publishConfig: { registry },
     repository: {
       type: 'git',
-      url: 'git+https://github.com/Anubis-Locker/anubis-web.git'
+      url: 'git+https://github.com/Anubis-Security-Tool/anubis-web.git'
     }
   }, null, 2) + '\n')
   console.log(JSON.stringify({ destination, renderer: binding.renderer, assetsTreeSha256: binding.assets.treeSha256, assetCount: binding.assets.count }))

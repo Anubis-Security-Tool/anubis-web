@@ -1,6 +1,6 @@
 name: docker-publish
 
-# Builds the web image and pushes it to GHCR: ghcr.io/ai-security-tool/anubis-web
+# Builds the web image and pushes it to GHCR: ghcr.io/anubis-security-tool/anubis-web
 # Trigger: tag vX.Y.Z (must equal package.json "version") or manual run.
 # Last job rolls the image out to our VPS over SSH (skipped if DEPLOY_HOST is not set).
 on:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: ghcr.io/ai-security-tool/anubis-web
+  IMAGE: ghcr.io/anubis-security-tool/anubis-web
 
 jobs:
   image:

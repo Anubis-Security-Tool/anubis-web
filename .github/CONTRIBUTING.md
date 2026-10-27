@@ -1,6 +1,6 @@
 # CONTRIBUTING
 
-> First off, thank you for considering contributing to electerm-web.
+> Thank you for considering contributing to Anubis-Security-Tool Web.
 
 > electerm-web is an open source project and I love to receive contributions from our community — you! There are many ways to contribute, from writing tutorials or blog posts, improving the documentation, submitting bug reports and feature requests or writing code which can be incorporated into electerm-web itself.
 
@@ -15,4 +15,4 @@ Basic process:
     * Send a pull request
 
 > Want to report a issue or give some suggestions?
-[Submit a issue](https://github.com/ai-security-tool/web/issues/new)
+[Submit a issue](https://github.com/Anubis-Security-Tool/anubis-web/issues/new)

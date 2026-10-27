@@ -11,7 +11,7 @@
 const env = (typeof process !== 'undefined' && process.env) || {}
 
 const domain = env.BRAND_DOMAIN || 'anubis.locker'
-const org = env.BRAND_GIT_ORG || 'Anubis-Locker'
+const org = env.BRAND_GIT_ORG || 'Anubis-Security-Tool'
 const repo = env.BRAND_GIT_REPO || 'anubis-web'
 const gitHost = 'https://github.com'
 const repoUrl = `${gitHost}/${org}/${repo}`
@@ -60,7 +60,7 @@ export const brand = {
       releases: `${repoUrl}/releases`,
       wiki: `${repoUrl}/wiki`,
       docker: `${gitHost}/${org}/web-docker`,
-      locales: `${gitHost}/${org}/locales`,
+      locales: `${gitHost}/${org}/anubis-locales`,
       desktop: `${gitHost}/${org}/anubis`
     }
   },

@@ -17,7 +17,7 @@ RUN npm run build \
 
 FROM node:24-bookworm-slim AS runtime
 LABEL org.opencontainers.image.title="Anubis-Security-Tool web" \
-      org.opencontainers.image.source="https://github.com/ai-security-tool/web" \
+      org.opencontainers.image.source="https://github.com/Anubis-Security-Tool/anubis-web" \
       org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

@@ -3,26 +3,40 @@
 Browser-based terminal / SSH / SFTP / RDP / VNC client, with standalone and
 approved managed-device access. Brand values live in `src/app/common/brand.config.js`.
 
-[Website](https://anubis.locker) · [Wiki](https://github.com/Anubis-Locker/anubis/wiki) · [Desktop](https://github.com/Anubis-Locker/anubis) · [Managed transport](https://github.com/Anubis-Locker/anubis-managed-access)
+[Website](https://anubis.locker) · [Wiki](https://github.com/Anubis-Security-Tool/anubis/wiki) · [Desktop](https://github.com/Anubis-Security-Tool/anubis) · [Managed transport](https://github.com/Anubis-Security-Tool/anubis-managed-access)
 
 Original MIT copyright and attribution, including © ZHAO Xudong, are preserved
 in [LICENSE](LICENSE).
 
 Chinese: [README_cn.md](README_cn.md)
 
-## Quick start
+## Requirements and release status
+
+Use **Node.js 24+**, npm and git. Source builds include native terminal and
+serial-port modules: install Python 3 and a C/C++ toolchain if compatible
+prebuilt binaries are unavailable. On Windows use Visual Studio Build Tools
+with Desktop development with C++; on Debian/Ubuntu install
+`python3 make g++`; on macOS install the Xcode command-line tools.
+
+This source targets the coordinated **5.7.4** Web, renderer and browser-assets
+release. A source commit is not a publication or deployment. The exact renderer,
+managed SDK and resource pins in `package.json` and the matching lock must be
+available from the Anubis registry before a normal fresh source install.
+Never replace missing release dependencies with a copied installed Desktop
+ASAR, a session directory, or packages from a different release.
+
+## Packaged Web runtime
 
 Install the independent Web runtime **only from the Anubis registry**:
 
 ```bash
-npm install --global anubis-web@5.6.12 --registry=https://npm.anubis.locker/
+npm install --global anubis-web@5.7.4 --registry=https://npm.anubis.locker/
 anubis-web
 ```
 
-The public Web CLI release is `5.6.12`, independently versioned from Desktop
-`5.7.2`. Source documentation does not mean a feature is present in an installed
-package or deployed service; check the installed version and its release notes.
-Updating this repository does not publish a new runtime or deploy a service.
+Use that versioned command only after the release owner publishes `5.7.4`.
+Check `anubis-web --version`; updating this repository does not change an
+already installed runtime or service.
 
 The CLI starts production mode with managed access to `https://api.anubis.locker`
 by default. It creates unique Web login credentials in a private
@@ -34,35 +48,117 @@ and `anubis-web --init` only initializes configuration without starting a server
 Updating the package does not overwrite existing settings, credentials or data.
 Do not install the similarly named package from the public npm registry.
 
-Or build from source:
+## Build and install from source
+
+Clone this repository and use the cross-platform source installer:
 
 ```bash
-# Linux / macOS (Node.js 24+, git, build tools)
-curl -fsSL https://raw.githubusercontent.com/Anubis-Locker/anubis-web/main/scripts/one-line-web.sh | bash
-# Windows
-# download scripts\one-line-web.bat and run it
-```
-
-The script clones `ANUBIS_REPO_URL` (default `https://github.com/Anubis-Locker/anubis-web.git`), builds, and creates a private `.env` with generated `SERVER_SECRET` / `SERVER_PASS` and the managed gateway configured. Start with `npm run managed` and open http://127.0.0.1:5577 locally, or use the gateway after approval. Set `ANUBIS_MANAGED_ACCESS=0` before installation for an explicit standalone install. Existing `.env` files are preserved on updates; `npm run managed` supplies the gateway default unless that opt-out is set.
-
-Manual:
-
-```bash
-git clone https://github.com/Anubis-Locker/anubis-web.git && cd anubis-web
-npm install --legacy-peer-deps --registry=https://npm.anubis.locker/
-npm run setup-managed     # generates strong credentials; preserves an existing .env
-npm run build
+git clone https://github.com/Anubis-Security-Tool/anubis-web.git
+cd anubis-web
+node scripts/install-source.js
 npm run managed
 ```
+
+The installer runs locked `npm ci --include=dev --legacy-peer-deps` explicitly
+against `https://npm.anubis.locker/`, copies the published shared renderer through
+the normal install hook, builds the browser bundle, verifies the complete asset
+manifest and only then creates a private `.env` with unique strong
+`SERVER_SECRET` / `SERVER_PASS`. It never starts a service or enrolls a device
+itself. An install, build or validation failure stops the sequence.
+
+From a combined source checkout, its bootstrap can invoke this same file by its
+path, for example `node web/scripts/install-source.js` from the root.
+The installer resolves its own repository directory, not the caller's working
+directory. It does not install Desktop or unrelated plugins; the root bootstrap
+owns those components.
+
+For an explicit full-source pipeline, the root bootstrap may pass local npm
+tarballs produced from the accepted source checkouts:
+
+```bash
+node web/scripts/install-source.js --renderer-package /absolute/path/electerm-react-5.7.4.tgz --sdk-package /absolute/path/managed-access-1.0.4.tgz --resource-package /absolute/path/resource-2.2.3.tgz
+```
+
+Tarball filenames are arbitrary; their internal `package/package.json` must
+match the exact package names and versions in this Web manifest. URLs, missing
+or nonregular files, duplicate package manifests, corrupt TAR headers and
+mismatched versions are rejected before npm runs. The main source producer
+assembles the shared renderer package (not the whole Desktop app); the SDK
+producer runs `npm pack --ignore-scripts --pack-destination <staging-directory>`
+in its checkout. The root bootstrap owns those absolute staging paths.
+Do not pass the Desktop application tarball as the renderer.
+
+With any explicit override the installer uses
+`npm install --no-save --package-lock=false` with the same own-registry and
+development-dependency flags, followed by exact installed-version checks,
+normal source copying, build and payload verification. It does not rewrite
+`package.json` or `package-lock.json`. This is a deliberate source-build mode,
+not a fallback after a missing registry package. Other dependencies still resolve from the accepted registry pins. Publishing
+immutable browser assets still requires the registry-bound renderer and lock;
+local source tarballs alone are not release provenance.
+
+For a **new standalone source installation**:
+
+```bash
+node scripts/install-source.js --standalone
+npm run managed
+```
+
+The generated `.env` records `ANUBIS_MANAGED_ACCESS=0`; the managed runner
+respects that opt-out. Existing `.env` files, passwords, databases and enrollment
+identities are never replaced. On an existing installation, change its private
+configuration deliberately or set `ANUBIS_MANAGED_ACCESS=0` in the process
+environment for a one-run opt-out. `--standalone` on the installer does not
+silently rewrite an existing managed configuration.
+
+Local URL: `http://127.0.0.1:5577`. Read `SERVER_PASS` locally from this checkout's
+`.env`, not from the controller admin token or a Windows password. Keep `.env`
+and `data` private; on Windows restrict their ACL to the installation's account
+and authorized administrators. Starting managed mode requires first device
+fingerprint approval and separate browser gateway authorization.
+
+One-line clone wrappers use the same installer:
+
+```bash
+# Linux / macOS; inspect the script before executing downloaded code
+curl -fsSL https://raw.githubusercontent.com/Anubis-Security-Tool/anubis-web/main/scripts/one-line-web.sh | bash
+# Windows: download scripts\one-line-web.bat from this repository and run it
+```
+
+Set `ANUBIS_DIR`, `ANUBIS_REPO_URL` or `ANUBIS_REF` to choose a checkout. Existing
+tracked edits or a failed fast-forward stop updates instead of building stale
+or partially updated source. `ANUBIS_MANAGED_ACCESS=0` also selects standalone
+defaults when a wrapper creates a new configuration.
+
+Equivalent manual sequence (all three platforms):
+
+```bash
+npm ci --include=dev --legacy-peer-deps --registry=https://npm.anubis.locker/
+npm run build
+node npm/anubis-web.js --check
+npm run setup-managed
+npm run managed
+```
+
+`npm run prod` runs the built source with production authentication but does
+not add a gateway URL; it remains opt-in through the existing environment.
+`npm run dev` / `npm start` are development only, not managed remote servers.
+The packaged CLI uses `ANUBIS_WEB_HOME` (default `~/.anubis-web`); the source
+runner uses this checkout's `.env` and `DB_PATH` (default `./data`). These are
+separate installations unless explicitly configured otherwise.
 
 ## Docker
 
 ```bash
-cp .sample.env .env   # fill SERVER_SECRET / SERVER_PASS
+npm run setup-managed
 docker compose up -d --build   # web + nginx on http://127.0.0.1:8080
 ```
 
-Container runs as non-root, read-only rootfs, all caps dropped, data in the `anubis-data` volume. Put TLS in front (see `examples/nginx-ssl.conf`).
+Set `ANUBIS_MANAGED_ACCESS=0` before generating a new configuration if the
+container should be standalone. Container runs as non-root, read-only rootfs,
+all caps dropped, data in the `anubis-data` volume. Put TLS in front (see
+`examples/nginx-ssl.conf`). Do not reuse the source database directory as a
+second concurrently running installation.
 
 ## Security defaults
 
@@ -105,12 +201,38 @@ installation secret is never printed.
 After approval, the client maintains an outbound authenticated tunnel, reconnects
 after network loss, and reports availability only while the local HTTP listener is
 healthy. The gateway authenticates browser operators separately, and the normal
-Web password/JWT login still applies. Registration alone does not mean the
+standalone Web `SERVER_PASS`/JWT login still applies. Desktop's native SYSTEM
+User/Administrator password-file adapter is a different backend contract, not
+an API implemented by this standalone Web server. Do not promise those Desktop
+role passwords will log in to this installation. Registration alone does not mean the
 installation is online, and enrollment never uploads SSH/VNC/MCP credentials
 or the machine's username. Set `ANUBIS_MANAGED_ACCESS=0` for the managed runner
 or use `anubis-web --standalone` to opt out explicitly. For the ordinary
 standalone source runner, unset `ANUBIS_MANAGED_URL`.
 The existing data-sync configuration is independent of this transport.
+
+### Local source-suite sync defaults
+
+The root source-suite runner may provide `ANUBIS_SYNC_URL`,
+`ANUBIS_SYNC_USER` and `ANUBIS_SYNC_JWT_SECRET` only in the Web process
+environment from its private generated configuration. On a **brand-new default
+SQLite profile**, Web records those as `syncSetting.customApiUrl`,
+`customGistId` and `customAccessToken`, retaining the normal automatic-sync
+defaults. The URL must be a loopback HTTP `/api/sync` endpoint and the JWT
+secret must be unique and strong. Partial or invalid new-profile configuration
+fails explicitly before creating database files. No custom sync password is
+generated or assumed.
+
+Existing SQLite files, existing user configuration and legacy profile
+directories are never reseeded, even if their sync settings are empty.
+Changing these environment variables later does not rotate or overwrite saved
+sync credentials. Custom database adapters retain their existing initialization
+behavior. This mapping does not write `.env`, contact a sync service, or include
+the JWT secret in anonymous page data, logs, enrollment or build assets.
+The existing custom-sync protocol exposes its credential only to the
+authenticated installation UI; protect its profile and authenticate Web as you
+would shell access. The root runner owns the loopback sync service and its
+private configuration; Web does not install or start it.
 
 Run `npm run test-managed-web` for an isolated real-client channel check against
 a temporary local gateway fixture. It verifies Web JWT enforcement and a
@@ -150,20 +272,21 @@ used by the vite dev server, the `@brand-res` alias and `build/bin/copy.js`.
 
 ## Shared UI and local verification
 
-Desktop and web use the same client sources, published as
-`@ai-security-tool/electerm-react`. The previously published Web runtime `5.6.12` keeps renderer and
-browser-asset URLs pinned to `5.6.11` and
-includes its Lucide icon dependency. Automatic sync is enabled by default
+Desktop and Web use the same client sources, published as
+`@ai-security-tool/electerm-react`. Web `5.7.4` and its browser-assets package
+must use the exact accepted `5.7.4` renderer, not a mutable sibling Desktop
+checkout. Automatic sync is enabled by default
 against `https://sync.anubis.locker/api/sync`; account credentials are still
 required before data is uploaded.
 
-Current source/runtime candidates and the separate browser-assets release
-pipeline use version `5.7.3`, the exact published shared renderer `5.7.3`, and
-managed SDK `1.0.3`. The renderer includes its published browser-safe shared
+The coordinated release pins are recorded in `package.json` and
+`package-lock.json`; the release pipeline publishes the renderer first, then
+builds Web and immutable browser assets, then binds Desktop to those assets.
+The renderer includes its published browser-safe shared
 modules and distinguishes native embedded websites from ordinary browser iframe
-sessions. These source changes do not republish the frozen `anubis-web@5.6.12`
-runtime or deploy a running service. Standalone candidates remain private until
-a separate runtime publication decision.
+sessions. Source changes do not publish any package or deploy a running service.
+Standalone staging candidates remain private until an explicit publication
+decision.
 
 After building, run `npm run test3` and `npm run test-packaged-web`.
 The browser check needs `npx playwright install chromium`; it starts only
@@ -174,7 +297,8 @@ database and never connects to or deploys the public demo.
 Database tests use their own configuration directories and close SQLite handles
 before cleanup, including on Windows.
 
-After a production build, `npm run stage-browser-assets` prepares
+After a production build, `npm run stage-browser-assets -- --source-commit
+<full-renderer-source-commit>` prepares
 `dist/browser-assets-package-<renderer-version>` for `npm pack --ignore-scripts`.
 It refuses to overwrite an existing version's staging directory. This creates the
 version-matched `@ai-security-tool/anubis-browser-assets` package for the desktop
@@ -193,6 +317,20 @@ against the installed package before compilation.
 `source.json` records both source trees and the SHA-256 manifest of
 every asset, including fonts, WASM, images and icons. Pack and publish only from
 the resulting package directory, explicitly using `--registry=https://npm.anubis.locker/`.
+For `5.7.4`, staging also requires the renderer publisher's `anubisSource`
+metadata to match that source commit, recomputes its source-file hash in the
+publisher's canonical path order, and rejects modified copied build sources.
+
+The manually dispatched **Web and browser-assets packages** workflow
+(`release-packages.yml`) accepts the full renderer source commit and defaults
+to artifact-only mode. After the accepted renderer, SDK and resource releases
+exist and this repository's lock records their real integrities, it installs,
+builds, runs local browser/tunnel checks and packs both Web and browser assets.
+Only explicit `publish=true` uses `NPM_TOKEN` to publish to the Anubis registry.
+Existing different content at the same version is rejected; matching content
+can be reused without republishing. This workflow does not deploy or restart
+anything. Do not trigger a `v*` tag for this package-only flow: the separate
+legacy Docker workflow has a VPS rollout job.
 
 `npm pack` checks and includes the backend, production views/assets, and
 cross-platform `anubis-web` CLI, but not private data, `.env`, or source-only

@@ -9,12 +9,18 @@ import { resolve } from 'path'
 import fs from 'fs'
 import { tables, checkTable, toDoc, toRow } from '../common.js'
 import { DatabaseSync } from 'node:sqlite'
+import { sourceSyncDefaults } from '../../lib/source-sync.js'
+import defaultSettings from '../../common/config-default.js'
+import { userConfigId } from '../../common/constants.js'
 
 // Define database folder and paths for two database files
 const dbFolder = process.env.DB_PATH || resolve(cwd, 'data')
 const baseFolder = resolve(dbFolder, 'sqlite')
 const mainDbPath = resolve(baseFolder, 'electerm.db')
 const dataDbPath = resolve(baseFolder, 'electerm_data.db')
+const freshProfile = ![mainDbPath, dataDbPath, resolve(dbFolder, 'users'), resolve(dbFolder, 'nedb-database')]
+  .some(filename => fs.existsSync(filename))
+const initialSync = freshProfile ? sourceSyncDefaults() : null
 
 // Ensure parent directory exists
 if (!fs.existsSync(baseFolder)) {
@@ -33,6 +39,13 @@ for (const table of tables) {
   } else {
     mainDb.exec(`CREATE TABLE IF NOT EXISTS \`${table}\` (_id TEXT PRIMARY KEY, data TEXT)`)
   }
+}
+if (initialSync) {
+  const row = toRow({
+    _id: userConfigId,
+    syncSetting: { ...defaultSettings.syncSetting, ...initialSync }
+  })
+  dataDb.prepare('INSERT INTO `data` (_id, data) VALUES (?, ?)').run(row._id, row.data)
 }
 
 // Helper function to get the appropriate database for a table

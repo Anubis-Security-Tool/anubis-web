@@ -1,6 +1,6 @@
 {
   "name": "anubis-web",
-  "version": "5.7.3",
+  "version": "5.7.4",
   "description": "Anubis-Security-Tool: unified terminal, SSH, SFTP, RDP, VNC, Spice, MCP and batch workflows.",
   "main": "src/app/app.js",
   "type": "module",
@@ -8,20 +8,21 @@
     "anubis-web": "npm/anubis-web.js"
   },
   "scripts": {
-    "dev": "NODE_ENV=development node ./src/app/app.js",
-    "prod": "NODE_ENV=production node ./src/app/app.js",
+    "dev": "cross-env NODE_ENV=development node ./src/app/app.js",
+    "prod": "cross-env NODE_ENV=production node ./src/app/app.js",
     "managed": "node scripts/start-managed.js",
     "setup-managed": "node scripts/configure-managed.js",
+    "setup-source": "node scripts/install-source.js",
     "prepack": "node build/bin/verify-package.js",
     "build": "npm run compile",
-    "start": "NODE_ENV=development node ./build/vite/dev-server.js",
-    "clean": "node build/bin/clean",
-    "compile": "node build/bin/build",
+    "start": "cross-env NODE_ENV=development node ./build/vite/dev-server.js",
+    "clean": "node build/bin/clean.js",
+    "compile": "node build/bin/build.js",
     "vite-build": "cross-env NODE_ENV=production vite build --config ./build/vite/conf.js",
-    "install": "node build/bin/install",
+    "install": "node build/bin/install.js",
     "lint": "standard --verbose",
     "fix": "./node_modules/.bin/standard --fix",
-    "lock": "npm i --package-lock-only",
+    "lock": "npm install --package-lock-only --ignore-scripts --legacy-peer-deps --registry=https://npm.anubis.locker/ && node build/bin/registry-lock.js",
     "r": "./build/bin/release",
     "test": "npm run test1 && npm run test2",
     "test1": "./node_modules/.bin/playwright test test/e2e/00*.js --config test/playwright.conf.js",
@@ -34,23 +35,23 @@
     "stage-standalone": "node build/bin/standalone.js"
   },
   "license": "MIT",
-  "languageRepo": "https://github.com/Anubis-Locker/anubis-locales",
+  "languageRepo": "https://github.com/Anubis-Security-Tool/anubis-locales",
   "privacyNoticeLink": "https://docs.anubis.locker/privacy-notice",
   "knownIssuesLink": "https://docs.anubis.locker/known-issues",
   "sponsorLink": "https://anubis.locker/sponsor/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Anubis-Locker/anubis-web.git"
+    "url": "git+https://github.com/Anubis-Security-Tool/anubis-web.git"
   },
   "author": {
     "name": "Anubis-Security-Tool contributors (based on electerm by ZHAO Xudong)",
-    "url": "https://github.com/Anubis-Locker"
+    "url": "https://github.com/Anubis-Security-Tool"
   },
   "bugs": {
-    "url": "https://github.com/Anubis-Locker/anubis-web/issues"
+    "url": "https://github.com/Anubis-Security-Tool/anubis-web/issues"
   },
   "homepage": "https://anubis.locker",
-  "releases": "https://github.com/Anubis-Locker/anubis-web/releases",
+  "releases": "https://github.com/Anubis-Security-Tool/anubis-web/releases",
   "engines": {
     "node": ">=24.0.0"
   },
@@ -59,9 +60,9 @@
     "registry": "https://npm.anubis.locker/"
   },
   "devDependencies": {
-    "@ai-security-tool/electerm-react": "5.7.3",
+    "@ai-security-tool/electerm-react": "5.7.4",
     "@ai-security-tool/icons": "1.0.1",
-    "@ai-security-tool/resource": "2.2.1",
+    "@ai-security-tool/resource": "2.2.3",
     "@ant-design/icons": "^6.2.5",
     "@fontsource/maple-mono": "^5.2.6",
     "@novnc/novnc": "^1.7.0",
@@ -104,7 +105,7 @@
   "dependencies": {
     "@ai-security-tool/ftp-srv": "^1.0.6",
     "@ai-security-tool/locales": "2.3.34",
-    "@ai-security-tool/managed-access": "1.0.3",
+    "@ai-security-tool/managed-access": "1.0.4",
     "@ai-security-tool/ssh2": "1.22.1",
     "@ai-security-tool/ssh2-scp": "3.3.0",
     "@ai-security-tool/sync": "2.1.0",

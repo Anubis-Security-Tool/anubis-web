@@ -1,0 +1,104 @@
+name: Web and browser-assets packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      renderer_source_commit:
+        description: Full accepted main-repository commit that produced the pinned renderer
+        required: true
+        type: string
+      publish:
+        description: Publish verified immutable packages to the Anubis registry (no deployment)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://npm.anubis.locker/
+      - name: Validate release input
+        env:
+          RENDERER_COMMIT: ${{ inputs.renderer_source_commit }}
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs"
+            if (!/^[a-f0-9]{40}$/.test(process.env.RENDERER_COMMIT)) throw new Error("A full renderer commit is required")
+            const p = JSON.parse(readFileSync("package.json", "utf8"))
+            if (p.version !== p.devDependencies["@ai-security-tool/electerm-react"]) throw new Error("Web and renderer release versions must match")
+          '
+      - name: Install exact own-registry dependencies
+        run: npm ci --include=dev --legacy-peer-deps --no-audit --no-fund --registry=https://npm.anubis.locker/
+      - name: Check dependency versions and build complete payload
+        env:
+          RENDERER_COMMIT: ${{ inputs.renderer_source_commit }}
+        run: |
+          node scripts/install-source.js --check-dependencies
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs"
+            import { verifyRendererSource } from "./build/bin/renderer-source.js"
+            const directory = "node_modules/@ai-security-tool/electerm-react"
+            await verifyRendererSource(directory, JSON.parse(readFileSync(directory + "/package.json", "utf8")), process.env.RENDERER_COMMIT)
+          '
+          npm run build
+      - name: Unit and real loopback browser/tunnel checks
+        run: |
+          npm run test3
+          node --test test/packaged/web-smoke.js test/packaged/managed-web.js
+      - name: Stage and pack immutable release artifacts
+        env:
+          RENDERER_COMMIT: ${{ inputs.renderer_source_commit }}
+        run: |
+          npm run stage-browser-assets -- --source-commit "$RENDERER_COMMIT"
+          mkdir release-artifacts
+          version="$(node -p "require('./package.json').version")"
+          npm pack "./dist/browser-assets-package-$version" --ignore-scripts --pack-destination release-artifacts
+          npm pack --pack-destination release-artifacts
+          sha256sum release-artifacts/*.tgz > release-artifacts/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anubis-web-packages-${{ github.sha }}
+          path: release-artifacts/
+          if-no-files-found: error
+      - name: Publish accepted artifacts without overwriting existing versions
+        if: ${{ inputs.publish }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_REGISTRY_URL: ${{ secrets.NPM_REGISTRY_URL }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::NPM_TOKEN is required"; exit 1; fi
+          if [ "${NPM_REGISTRY_URL:-https://npm.anubis.locker/}" != "https://npm.anubis.locker/" ]; then
+            echo "::error::Only the Anubis registry is supported"; exit 1
+          fi
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          import { createHash } from 'node:crypto'
+          const version = JSON.parse(readFileSync('package.json')).version
+          const pending = []
+          for (const [name, filename] of [
+            ['@ai-security-tool/anubis-browser-assets', `ai-security-tool-anubis-browser-assets-${version}.tgz`],
+            ['anubis-web', `anubis-web-${version}.tgz`]
+          ]) {
+            const file = 'release-artifacts/' + filename
+            const expected = 'sha512-' + createHash('sha512').update(readFileSync(file)).digest('base64')
+            const response = await fetch('https://npm.anubis.locker/' + encodeURIComponent(name) + '/' + version)
+            if (response.status === 404) pending.push(file)
+            else if (!response.ok) throw new Error(`Registry preflight failed: ${response.status}`)
+            else if ((await response.json()).dist?.integrity !== expected) throw new Error(`Refusing to overwrite ${name}@${version}`)
+          }
+          writeFileSync('release-artifacts/publish-list.txt', pending.join('\n') + (pending.length ? '\n' : ''))
+          JS
+          while IFS= read -r artifact; do
+            npm publish "$artifact" --ignore-scripts --registry=https://npm.anubis.locker/
+          done < release-artifacts/publish-list.txt
