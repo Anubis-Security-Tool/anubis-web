@@ -1,6 +1,12 @@
-# Anubis-Security-Tool (web)
+# 🌐 Anubis-Security-Tool Web
 
-Browser-based terminal / SSH / SFTP / RDP / VNC client, a hardened fork of [electerm-web](https://github.com/electerm/electerm-web) (MIT, © ZHAO Xudong). Brand values live in `src/app/common/brand.config.js`.
+Browser-based terminal / SSH / SFTP / RDP / VNC client, with standalone and
+approved managed-device access. Brand values live in `src/app/common/brand.config.js`.
+
+[Website](https://anubis.locker) · [Wiki](https://github.com/Anubis-Locker/anubis/wiki) · [Desktop](https://github.com/Anubis-Locker/anubis) · [Managed transport](https://github.com/Anubis-Locker/anubis-managed-access)
+
+Original MIT copyright and attribution, including © ZHAO Xudong, are preserved
+in [LICENSE](LICENSE).
 
 Chinese: [README_cn.md](README_cn.md)
 
@@ -12,6 +18,11 @@ Install the independent Web runtime **only from the Anubis registry**:
 npm install --global anubis-web@5.6.12 --registry=https://npm.anubis.locker/
 anubis-web
 ```
+
+The public Web CLI release is `5.6.12`, independently versioned from Desktop
+`5.7.2`. Source documentation does not mean a feature is present in an installed
+package or deployed service; check the installed version and its release notes.
+Updating this repository does not publish a new runtime or deploy a service.
 
 The CLI starts production mode with managed access to `https://api.anubis.locker`
 by default. It creates unique Web login credentials in a private
