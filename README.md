@@ -325,6 +325,32 @@ For `5.7.4` and newer, staging also requires the renderer publisher's `anubisSou
 metadata to match that source commit, recomputes its source-file hash in the
 publisher's canonical path order, and rejects modified copied build sources.
 
+New builds also preserve original project and dependency legal documents under
+`dist/assets/third-party/` (the browser package ships the same directory under
+`assets/third-party/`). `index.json` maps exact installed/locked package versions,
+original relative paths, upstream archive integrities and byte-identical notices
+to content-addressed files. Nested/vendored licenses, attribution files and
+original READMEs are retained; fallback source headers remain original files,
+not rewritten license claims. A license name or link alone is not a substitute
+for complete original terms: unresolved entries fail the build and are listed
+in the inventory for review. Supplemental originals require an exact package
+version, upstream commit and checksum. The own-registry-pinned
+`@ai-security-tool/third-party-compliance@1.0.1` capsule is copied in full,
+including its manifest, original supplemental notices, preferred source archives
+and rebuilding/relinking instructions. An explicitly recorded
+`upstream-declaration-only` exception preserves the upstream declaration and
+exact source instead of inventing an upstream copyright or license grant.
+
+The asset manifest includes this inventory and every preserved file, so neither
+Web packaging nor browser-asset staging can silently discard legal documents.
+Build, staging and prepack gates from `5.7.6` onward reject missing, modified or
+unresolved notice inventories. Existing production asset-integrity checks cover
+the preserved originals without changing server behavior. This does not rewrite published
+`5.7.5` packages or change the shared renderer's source bytes.
+Before upload or publication, CI reads both actual `npm pack` archives and
+verifies every asset and preserved original against the shared asset manifest;
+source-tree checks alone cannot hide files omitted by packaging filters.
+
 The manually dispatched **Web and browser-assets packages** workflow
 (`release-packages.yml`) accepts the full renderer source commit and defaults
 to artifact-only mode. After the accepted renderer, SDK and resource releases

@@ -79,6 +79,8 @@ jobs:
           npm pack "./dist/browser-assets-package-$version" --ignore-scripts --pack-destination release-artifacts
           npm pack --pack-destination release-artifacts
           sha256sum release-artifacts/*.tgz > release-artifacts/SHA256SUMS
+      - name: Verify originals in actual packed Web and browser archives
+        run: node build/bin/verify-release-archives.js
       - uses: actions/upload-artifact@v4
         with:
           name: anubis-web-packages-${{ github.sha }}

@@ -6,6 +6,8 @@ import { promisify, parseArgs } from 'node:util'
 import { resolveBrandResDir } from '../../src/app/common/brand-res.js'
 import { treeManifest, treeHash } from '../../src/app/common/asset-manifest.js'
 import { verifyRendererSource } from './renderer-source.js'
+import { collectThirdPartyNotices } from './third-party-notices.js'
+import { noticesRequired } from './verify-third-party-notices.js'
 
 const run = promisify(execFile)
 const rendererName = '@ai-security-tool/electerm-react'
@@ -102,10 +104,12 @@ export async function stageBrowserAssets ({
   ]) {
     await access(filename)
   }
-  const files = await treeManifest(assets)
+  const compiledFiles = await treeManifest(assets)
   for (const pattern of [/\.(woff2?|ttf|otf)$/, /\.wasm$/, /^icons\//, /^images\//]) {
-    if (!Object.keys(files).some(name => pattern.test(name))) throw new Error(`Missing required browser assets: ${pattern}`)
+    if (!Object.keys(compiledFiles).some(name => pattern.test(name))) throw new Error(`Missing required browser assets: ${pattern}`)
   }
+  await collectThirdPartyNotices({ root, assets, requireCompliance: noticesRequired(version) })
+  const files = await treeManifest(assets)
   await mkdir(destination)
   await cp(assets, resolve(destination, 'assets'), { recursive: true })
   await cp(resolve(root, 'LICENSE'), resolve(destination, 'LICENSE'))

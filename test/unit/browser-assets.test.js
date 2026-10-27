@@ -26,6 +26,8 @@ async function fixture (t) {
   const installed = join('node_modules', '@ai-security-tool', 'electerm-react')
   await file('package.json', JSON.stringify({ type: 'module', devDependencies: { [renderer]: version } }))
   await file(join(installed, 'package.json'), JSON.stringify({ name: renderer, version }))
+  const license = await readFile(new URL('../../LICENSE', import.meta.url))
+  await file(join(installed, 'LICENSE'), license)
   await file(join(installed, 'client', 'entry.jsx'), 'published immutable renderer')
   await file('package-lock.json', JSON.stringify({
     packages: {
@@ -36,7 +38,7 @@ async function fixture (t) {
       }
     }
   }))
-  await file('LICENSE', 'MIT fixture')
+  await file('LICENSE', license)
   for (const name of [
     join('js', `basic-${version}.js`), join('js', `electerm-${version}.js`), join('js', `worker-${version}.js`),
     join('css', `style-${version}.css`), join('images', 'logo.png'), join('icons', 'terminal.svg'),
@@ -60,7 +62,8 @@ test('browser asset staging preserves prior outputs and binds complete assets to
   assert.ok(manifest.files.includes('source.json'))
   assert.equal(binding.renderer.sourceCommit, sourceCommit)
   assert.equal(binding.renderer.version, version)
-  assert.equal(binding.assets.count, 8)
+  assert.equal(binding.assets.count, 11)
+  assert.ok(binding.assets.files['third-party/index.json'])
   assert.match(binding.assets.treeSha256, /^[0-9a-f]{64}$/)
   for (const [name, hash] of Object.entries(binding.assets.files)) {
     const contents = await readFile(join(destination, 'assets', ...name.split('/')))

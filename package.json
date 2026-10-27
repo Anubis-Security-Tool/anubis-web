@@ -63,6 +63,7 @@
     "@ai-security-tool/electerm-react": "5.7.5",
     "@ai-security-tool/icons": "1.0.1",
     "@ai-security-tool/resource": "2.2.3",
+    "@ai-security-tool/third-party-compliance": "1.0.1",
     "@ant-design/icons": "^6.2.5",
     "@fontsource/maple-mono": "^5.2.6",
     "@novnc/novnc": "^1.7.0",
@@ -174,6 +175,7 @@
     "scripts/start-managed.js",
     "build/bin/install.js",
     "build/bin/verify-package.js",
+    "build/bin/verify-third-party-notices.js",
     ".sample.env",
     "README.md",
     "LICENSE"
