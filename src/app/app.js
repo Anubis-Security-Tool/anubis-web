@@ -10,6 +10,9 @@ import { once } from 'node:events'
 import { managedConfig } from './lib/managed-config.js'
 import { startManagedAccess } from './lib/managed-access.js'
 import { randomBytes } from 'node:crypto'
+import { createShutdown } from './lib/shutdown.js'
+import { cleanupWidgets } from './widgets/load-widget.js'
+import globalState from './server/global-state.js'
 
 process.on('uncaughtException', (err) => {
   log.error('uncaughtException', err)
@@ -35,10 +38,11 @@ async function main () {
     console.log(`server runs on http://${HOST}:${PORT}`)
   })
   await once(server, 'listening')
+  let access
   if (managed) {
     const { createAgent } = await import('@ai-security-tool/managed-access')
     let lastStatus
-    const access = await startManagedAccess({
+    access = await startManagedAccess({
       server,
       createAgent,
       version: packInfo.version,
@@ -51,22 +55,17 @@ async function main () {
         if (state.error) log.error('[managed]', state.error)
       }
     })
-    let stopping = false
-    const shutdown = async () => {
-      if (stopping) return
-      stopping = true
-      try {
-        await access.stop()
-        server.close()
-        process.exit(0)
-      } catch (error) {
-        log.error('Failed to stop managed access:', error)
-        process.exit(1)
-      }
-    }
-    process.once('SIGINT', shutdown)
-    process.once('SIGTERM', shutdown)
   }
+  const shutdown = createShutdown({
+    server,
+    stopManaged: access ? () => access.stop() : undefined,
+    stopWidgets: cleanupWidgets,
+    getSessions: () => Object.values(globalState.data),
+    log,
+    exit: code => process.exit(code)
+  })
+  process.once('SIGINT', shutdown)
+  process.once('SIGTERM', shutdown)
 }
 
 // main() is async, so anything thrown inside it (a failed import, an

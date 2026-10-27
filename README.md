@@ -147,6 +147,10 @@ The packaged CLI uses `ANUBIS_WEB_HOME` (default `~/.anubis-web`); the source
 runner uses this checkout's `.env` and `DB_PATH` (default `./data`). These are
 separate installations unless explicitly configured otherwise.
 
+Stop the server with Ctrl+C or SIGTERM. Both standalone and managed mode close
+the listener, stop running widgets and terminal sessions, and stop any managed
+transport before exiting. Cleanup errors are logged and produce a nonzero exit.
+
 ## Docker
 
 ```bash

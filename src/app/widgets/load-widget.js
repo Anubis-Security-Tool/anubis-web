@@ -178,52 +178,25 @@ async function runWidgetFunc (instanceId, funcName, ...args) {
   }
 }
 
-async function cleanup () {
+async function cleanupWidgets () {
   if (runningInstances.size === 0) {
     return
   }
 
-  const stopPromises = []
-
-  for (const [instanceId, instance] of runningInstances) {
-    console.log(`Stopping widget instance: ${instanceId}`)
-    try {
-      const stopPromise = instance.stop()
-        .then(() => {
-          console.log(`Successfully stopped widget instance: ${instanceId}`)
-        })
-        .catch(err => {
-          console.error(`Error stopping widget instance ${instanceId}:`, err)
-        })
-      stopPromises.push(stopPromise)
-    } catch (err) {
-      console.error(`Error initiating stop for widget instance ${instanceId}:`, err)
-    }
+  const results = await Promise.allSettled(
+    [...runningInstances.keys()].map(async instanceId => stopWidget(instanceId))
+  )
+  const failures = results.filter(result => result.status === 'rejected')
+  if (failures.length) {
+    throw new AggregateError(failures.map(result => result.reason), 'Failed to stop widget instances')
   }
-
-  try {
-    await Promise.allSettled(stopPromises)
-    runningInstances.clear()
-    console.log('All widget instances have been stopped')
-  } catch (err) {
-    console.error('Error during cleanup:', err)
-  }
+  console.log('All widget instances have been stopped')
 }
-
-// Register cleanup handlers only for process exit signals
-function registerCleanupHandlers () {
-  process.on('SIGTERM', async () => {
-    console.log('Received SIGTERM, cleaning up widgets...')
-    await cleanup()
-  })
-}
-
-// Initialize cleanup handlers
-registerCleanupHandlers()
 
 export {
   listWidgets,
   runWidget,
   stopWidget,
-  runWidgetFunc
+  runWidgetFunc,
+  cleanupWidgets
 }
