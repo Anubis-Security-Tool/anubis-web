@@ -97,6 +97,20 @@ test('published gateway requires approval and operator session before independen
     }
     Object.assign(process.env, previous)
     await rm(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+    await delay(50)
+    t.diagnostic(JSON.stringify({
+      remainingSessions: Object.keys(globalState.data).length,
+      resources: process.getActiveResourcesInfo(),
+      handles: process._getActiveHandles().map(handle => ({
+        type: handle.constructor.name,
+        fd: handle._handle?.fd,
+        listening: handle.listening,
+        localPort: handle.localPort,
+        remotePort: handle.remotePort
+      })),
+      nativeHandles: process.report.getReport().libuv.filter(handle => handle.is_active && handle.is_referenced)
+        .map(handle => ({ type: handle.type, fd: handle.fd, pid: handle.pid }))
+    }))
   })
   const { createApp } = await appModule('server', 'server.js')
   const app = await createApp({ managedLocalAuth })
