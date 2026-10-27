@@ -63,8 +63,8 @@ jobs:
         timeout-minutes: 5
         run: node --test --test-reporter=tap test/packaged/web-smoke.js
       - name: Real gateway browser and MCP checks
-        timeout-minutes: 5
-        run: node --test --test-reporter=tap test/packaged/managed-web.js
+        timeout-minutes: 2
+        run: timeout --signal=TERM --kill-after=5s 90s node --test --test-reporter=tap test/packaged/managed-web.js
       - name: Stage and pack immutable release artifacts
         env:
           RENDERER_COMMIT: ${{ inputs.renderer_source_commit }}

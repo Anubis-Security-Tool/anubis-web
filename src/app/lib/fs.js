@@ -96,12 +96,11 @@ const run = async (cmd) => {
   if (!Bash) {
     throw new Error('Local shell (node-bash) is not available on this platform')
   }
-  const ps = new Bash({
+  return Bash.invoke(cmd, {
     executableOptions: {
       '--login': true
     }
   })
-  return ps.invokeCommand(cmd)
     .then(s => s.stdout.toString())
 }
 
