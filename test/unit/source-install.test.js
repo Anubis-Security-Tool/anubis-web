@@ -4,11 +4,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, copyFile, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { sourceInstallPlan, installSource, sourceRoot } from '../../scripts/install-source.js'
 import { configureManagedInstallation } from '../../scripts/configure-managed.js'
 import { gzipSync } from 'node:zlib'
 import { readFileSync, existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { dependencyPath } from '../../build/vite/browser-dependencies.js'
 
 const quiet = { info () {} }
 
@@ -185,12 +187,79 @@ test('explicit local source tarballs require exact names/versions and do not rew
   })
   assert.equal(plan[0].args[0], 'install')
   assert.ok(plan[0].args.includes('--no-save'))
-  assert.ok(plan[0].args.includes('--package-lock=false'))
+  assert.ok(plan[0].args.includes('--package-lock=true'))
   assert.ok(plan[0].args.includes('--registry=https://npm.anubis.locker/'))
   assert.deepEqual(plan[0].args.slice(-3), [renderer, sdk, resource])
   assert.equal(plan.at(-1).env.ANUBIS_MANAGED_ACCESS, '0')
   assert.equal(await readFile(join(root, 'package-lock.json'), 'utf8'), 'preserved-lock')
   assert.deepEqual(JSON.parse(await readFile(join(root, 'package.json'))), manifest)
+})
+
+test('real local-tar npm install reads the accepted nested lock graph without writing it', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'anubis-local-lock-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const artifacts = {}
+  for (const [label, manifest] of Object.entries({
+    renderer: { name: '@ai-security-tool/electerm-react', version: '1.0.0' },
+    localRenderer: { name: '@ai-security-tool/electerm-react', version: '1.0.0', description: 'local-source-producer' },
+    child1: { name: 'fixture-child', version: '1.0.0' },
+    child2: { name: 'fixture-child', version: '2.0.0' }
+  })) {
+    const file = join(root, label + '.tgz')
+    const bytes = packedManifest(manifest)
+    await writeFile(file, bytes)
+    artifacts[label] = { file, version: manifest.version, resolved: pathToFileURL(file).href, integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64') }
+  }
+  const library = { name: 'fixture-lib', version: '1.0.0', dependencies: { 'fixture-child': artifacts.child1.resolved } }
+  const libraryFile = join(root, 'library.tgz')
+  const libraryBytes = packedManifest(library)
+  await writeFile(libraryFile, libraryBytes)
+  const manifest = {
+    name: 'anubis-local-lock-test',
+    version: '1.0.0',
+    private: true,
+    dependencies: {
+      '@ai-security-tool/electerm-react': '1.0.0',
+      'fixture-child': artifacts.child2.resolved,
+      'fixture-lib': pathToFileURL(libraryFile).href
+    }
+  }
+  const locked = artifact => ({ version: artifact.version, resolved: artifact.resolved, integrity: artifact.integrity })
+  const lock = {
+    name: manifest.name,
+    version: manifest.version,
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      '': { name: manifest.name, version: manifest.version, dependencies: manifest.dependencies },
+      'node_modules/@ai-security-tool/electerm-react': locked(artifacts.renderer),
+      'node_modules/fixture-child': locked(artifacts.child2),
+      'node_modules/fixture-lib': {
+        version: '1.0.0',
+        resolved: pathToFileURL(libraryFile).href,
+        integrity: 'sha512-' + createHash('sha512').update(libraryBytes).digest('base64'),
+        dependencies: library.dependencies
+      },
+      'node_modules/fixture-lib/node_modules/fixture-child': locked(artifacts.child1)
+    }
+  }
+  const manifestBytes = JSON.stringify(manifest)
+  const lockBytes = JSON.stringify(lock)
+  await writeFile(join(root, 'package.json'), manifestBytes)
+  await writeFile(join(root, 'package-lock.json'), lockBytes)
+  const step = sourceInstallPlan({ root, args: ['--renderer-package', artifacts.localRenderer.file] })[0]
+  execFileSync(step.command, [...step.args, '--offline', '--ignore-scripts', '--cache', join(root, 'cache')], {
+    cwd: root, env: step.env, timeout: 30000, stdio: 'pipe'
+  })
+  assert.equal(await readFile(join(root, 'package.json'), 'utf8'), manifestBytes)
+  assert.equal(await readFile(join(root, 'package-lock.json'), 'utf8'), lockBytes)
+  const installed = JSON.parse(await readFile(join(root, 'node_modules/@ai-security-tool/electerm-react/package.json')))
+  assert.equal(installed.description, 'local-source-producer')
+  for (const [key, record] of Object.entries(lock.packages).filter(([key]) => key)) {
+    const path = join(root, key, 'package.json')
+    assert.equal(JSON.parse(await readFile(path)).version, record.version)
+    assert.equal(dependencyPath(path), key)
+  }
 })
 
 test('local source package inputs reject remote URLs, wrong identities, corrupt or duplicate manifests', async t => {

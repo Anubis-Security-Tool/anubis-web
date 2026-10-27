@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { collectThirdPartyNotices } from '../../build/bin/third-party-notices.js'
-import { verifyThirdPartyNotices } from '../../build/bin/verify-third-party-notices.js'
+import { selectLicenseAlternative, verifyThirdPartyNotices } from '../../build/bin/verify-third-party-notices.js'
 import { verifyProductionAssets, writeProductionManifest } from '../../src/app/lib/production-assets.js'
 import { treeManifest } from '../../src/app/common/asset-manifest.js'
 import { verifyAssetArchive } from '../../build/bin/verify-release-archives.js'
@@ -15,6 +15,7 @@ import { promisify } from 'node:util'
 import { browserDependencies, dependencyPath } from '../../build/vite/browser-dependencies.js'
 
 const original = await readFile(new URL('../../LICENSE', import.meta.url))
+const bsdOriginal = await readFile(new URL('../fixtures/node-forge-bsd-original.txt', import.meta.url))
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const run = promisify(execFile)
 
@@ -347,11 +348,62 @@ test('native and browser module proofs form a validated union without changing t
   await assert.rejects(collectThirdPartyNotices({ ...options, additionalBundleManifests: [root] }), /regular file/)
   await assert.rejects(collectThirdPartyNotices({ ...options, additionalBundleManifests: [join(root, 'missing-proof.json')] }), { code: 'ENOENT' })
   await file('native/browser-dependencies.json', '{"format":1,"packages":["node_modules/unknown"]}')
-  await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
+  await assert.rejects(collectThirdPartyNotices(options), /unknown identities: node_modules\/unknown/)
   await file('native/browser-dependencies.json', '{"format":1,"packages":["node_modules/native-library","node_modules/native-library"]}')
   await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
   await file('native/browser-dependencies.json', '{"format":2,"packages":[]}')
   await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
+})
+
+test('SPDX alternatives require an original permissive grant and preserve AND, parentheses and WITH semantics', () => {
+  const notices = [{ file: 'bsd', bytes: bsdOriginal }, { file: 'mit', bytes: original }]
+  const bsd = [{ license: 'BSD-3-Clause', notice: 'bsd' }]
+  assert.deepEqual(selectLicenseAlternative('(BSD-3-Clause OR GPL-2.0)', notices), bsd)
+  assert.deepEqual(selectLicenseAlternative('(GPL-2.0 OR BSD-3-Clause)', notices), bsd)
+  assert.deepEqual(selectLicenseAlternative('BSD-3-Clause OR GPL-2.0 AND MIT', notices), bsd)
+  assert.deepEqual(selectLicenseAlternative('(BSD-3-Clause OR GPL-2.0) AND MIT', notices), [
+    ...bsd, { license: 'MIT', notice: 'mit' }
+  ])
+  for (const expression of [
+    'GPL-2.0', 'LGPL-2.1-only', 'MPL-2.0', 'BSD-3-Clause AND GPL-2.0',
+    '(BSD-3-Clause OR GPL-2.0) AND MPL-2.0', 'GPL-2.0 OR LicenseRef-Unknown',
+    'GPL-2.0 WITH Classpath-exception-2.0', 'GPL-2.0 OR BSD-3-Clause WITH LicenseRef-Unknown'
+  ]) assert.equal(selectLicenseAlternative(expression, notices), null, expression)
+  assert.equal(selectLicenseAlternative('BSD-3-Clause OR GPL-2.0', notices.slice(1)), null)
+  assert.equal(selectLicenseAlternative('BSD-3-Clause OR GPL-2.0', [{ file: 'url', bytes: Buffer.from('BSD-3-Clause https://opensource.org/licenses/BSD-3-Clause') }]), null)
+  for (const expression of ['BSD-3-Clause OR GPL-2.0 AND', '(BSD-3-Clause OR GPL-2.0', 'GPL-2.0 OR ()', 'GPL-2.0 || MIT']) {
+    assert.throws(() => selectLicenseAlternative(expression, notices), /Invalid SPDX license expression/)
+  }
+})
+
+test('runtime dual-license selection preserves original SPDX metadata and bytes, and must be revalidated', async t => {
+  const context = await fixture(t)
+  const { root, assets, file } = context
+  await capsuleFixture(context)
+  const key = 'node_modules/node-forge'
+  const lock = JSON.parse(await readFile(join(root, 'package-lock.json')))
+  lock.packages[key] = { version: '1.4.0' }
+  await file('package-lock.json', JSON.stringify(lock))
+  const metadata = '{"name":"node-forge","version":"1.4.0","license":"(BSD-3-Clause OR GPL-2.0)"}'
+  await file(`${key}/package.json`, metadata)
+  await file(`${key}/LICENSE`, bsdOriginal)
+  const index = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  const forge = index.packages.find(item => item.path === key)
+  assert.equal(forge.runtime, true)
+  assert.equal(forge.license, '(BSD-3-Clause OR GPL-2.0)')
+  assert.equal(forge.licenseSelection[0].license, 'BSD-3-Clause')
+  assert.deepEqual(await readFile(join(assets, 'third-party', forge.licenseSelection[0].notice)), bsdOriginal)
+  assert.equal(await readFile(join(assets, 'third-party', forge.packageJson), 'utf8'), metadata)
+  await verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true })
+  forge.licenseSelection[0].license = 'GPL-2.0'
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /license selection proof is missing or contradictory/)
+  delete forge.licenseSelection
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /license selection proof is missing or contradictory/)
+  forge.license = 'BSD-3-Clause AND GPL-2.0'
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /preferred source is required/)
 })
 
 test('exact musl binding reuses its proven shared-project notice, never another version or integrity', async t => {

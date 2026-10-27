@@ -92,10 +92,11 @@ in its checkout. The root bootstrap owns those absolute staging paths.
 Do not pass the Desktop application tarball as the renderer.
 
 With any explicit override the installer uses
-`npm install --no-save --package-lock=false` with the same own-registry and
+`npm install --no-save --package-lock=true` with the same own-registry and
 development-dependency flags, followed by exact installed-version checks,
 normal source copying, build and payload verification. It does not rewrite
-`package.json` or `package-lock.json`. This is a deliberate source-build mode,
+`package.json` or `package-lock.json`: the lock is read to preserve the accepted
+dependency graph, while `--no-save` prevents writing it. This is a deliberate source-build mode,
 not a fallback after a missing registry package. Other dependencies still resolve from the accepted registry pins. Publishing
 immutable browser assets still requires the registry-bound renderer and lock;
 local source tarballs alone are not release provenance.
@@ -357,6 +358,12 @@ are required for runtime dependencies or code present in any collected graph,
 including the dev-dependency noVNC and SPICE libraries. Build-only compilers
 such as Lightning CSS retain their original notices and metadata; their native
 binaries/code are not shipped merely because the generated CSS is shipped.
+An SPDX `OR` may select an explicit permissive alternative only when its full
+original grant is preserved. The inventory records and revalidates the selected
+license and original notice file, without rewriting the upstream SPDX expression.
+This supports original BSD-3-Clause and MIT alternatives; `AND` still requires
+every selected term, and unsupported alternatives or exceptions do not waive
+preferred sources. Sole GPL/LGPL/MPL terms remain subject to the source gate.
 Missing bundle evidence or a classification that contradicts it fails the gate.
 Native source builds use their own installation root and lock and pass their
 actual native Vite proof alongside the embedded-browser proof:

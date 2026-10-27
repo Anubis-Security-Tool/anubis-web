@@ -14,6 +14,60 @@ export function isNoticePath (path) {
     !path.split('/').some(part => !part || part === '.' || part === '..')
 }
 
+export function selectLicenseAlternative (expression, notices) {
+  if (typeof expression !== 'string' || !/GPL|MPL/.test(expression)) return null
+  const grants = {
+    MIT: /Copyright[\s\S]+Permission is hereby granted[\s\S]+copyright notice and this permission notice[\s\S]+THE SOFTWARE IS PROVIDED[\s\S]+IN NO EVENT SHALL/i,
+    'BSD-3-Clause': /Copyright[\s\S]+Redistribution and use in source and binary forms[\s\S]+Redistributions of source code must retain[\s\S]+Redistributions in binary form must reproduce[\s\S]+Neither the name[\s\S]+endorse or promote[\s\S]+THIS SOFTWARE IS PROVIDED[\s\S]+IN NO EVENT SHALL/i
+  }
+  const tokens = expression.match(/[()]|[A-Za-z0-9][A-Za-z0-9.+:-]*/g) || []
+  const invalid = () => { throw new Error('Invalid SPDX license expression') }
+  if (tokens.join('') !== expression.replace(/\s/g, '')) invalid()
+  let position = 0
+  const identifier = () => {
+    const token = tokens[position++]
+    if (!token || ['(', ')', 'AND', 'OR', 'WITH'].includes(token)) invalid()
+    return token
+  }
+  function atom () {
+    if (tokens[position] === '(') {
+      position++
+      const result = alternatives()
+      if (tokens[position++] !== ')') invalid()
+      return result
+    }
+    const license = identifier()
+    if (tokens[position] === 'WITH') {
+      position++
+      identifier()
+      return null
+    }
+    const notice = Object.hasOwn(grants, license) && notices.find(item => grants[license].test(item.bytes.toString('utf8')))
+    return notice ? [{ license, notice: notice.file }] : null
+  }
+  function conjunction () {
+    let result = atom()
+    while (tokens[position] === 'AND') {
+      position++
+      const next = atom()
+      result = result && next ? [...result, ...next] : null
+    }
+    return result
+  }
+  function alternatives () {
+    let result = conjunction()
+    while (tokens[position] === 'OR') {
+      position++
+      const next = conjunction()
+      if (!result) result = next
+    }
+    return result
+  }
+  const result = alternatives()
+  if (position !== tokens.length) invalid()
+  return result && [...new Map(result.map(item => [item.license, item])).values()].sort((a, b) => a.license.localeCompare(b.license))
+}
+
 export async function verifyThirdPartyNotices (directory, { requireCompliance = false } = {}) {
   const index = JSON.parse(await readFile(resolve(directory, 'index.json'), 'utf8'))
   if (index.format !== 1 || !Array.isArray(index.packages) || !index.packages.length ||
@@ -25,6 +79,7 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
       !index.files[index.compliance.manifest])) {
     throw new Error('The exact verified original compliance capsule is required')
   }
+  const originals = new Map()
   for (const [name, hash] of Object.entries(index.files)) {
     const capsulePath = name.startsWith('compliance/') && isNoticePath(name)
     if ((!/^(NOTICE-[a-f0-9]{64}\.txt|PACKAGE-[a-f0-9]{64}\.json)$/.test(name) && !capsulePath) ||
@@ -33,6 +88,7 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
     if (createHash('sha256').update(bytes).digest('hex') !== hash) {
       throw new Error(`Third-party notice checksum mismatch: ${name}`)
     }
+    originals.set(name, bytes)
   }
   const files = await treeManifest(directory)
   delete files['index.json']
@@ -97,7 +153,13 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
       throw new Error('Shared upstream original notice provenance is missing')
     }
     if (requireCompliance && (item.runtime || item.bundled) && /GPL|MPL/.test(item.license || '') && !item.sourceArchives?.length) {
-      throw new Error(`Original third-party preferred source is required: ${item.name}`)
+      const selection = selectLicenseAlternative(item.license, item.notices.map(notice => ({
+        file: notice.file, bytes: originals.get(notice.file)
+      })))
+      if (!selection) throw new Error(`Original third-party preferred source is required: ${item.name}`)
+      if (JSON.stringify(item.licenseSelection) !== JSON.stringify(selection)) {
+        throw new Error(`Original permissive license selection proof is missing or contradictory: ${item.name}`)
+      }
     }
   }
   return index

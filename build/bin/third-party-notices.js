@@ -1,7 +1,7 @@
 import { lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { resolve, join, isAbsolute } from 'node:path'
 import { createHash } from 'node:crypto'
-import { isNoticePath, verifyThirdPartyNotices } from './verify-third-party-notices.js'
+import { isNoticePath, selectLicenseAlternative, verifyThirdPartyNotices } from './verify-third-party-notices.js'
 import { treeManifest } from '../../src/app/common/asset-manifest.js'
 
 const complianceName = '@ai-security-tool/third-party-compliance'
@@ -136,10 +136,18 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
   let bundled
   const recordBundle = bytes => {
     const evidence = JSON.parse(bytes)
-    if (evidence.format !== 1 || !Array.isArray(evidence.packages) ||
-        evidence.packages.some(path => typeof path !== 'string' || !lock.packages[path]) ||
-        new Set(evidence.packages).size !== evidence.packages.length) {
-      throw new Error('Invalid compiled browser dependency evidence')
+    if (!evidence || evidence.format !== 1 || !Array.isArray(evidence.packages)) {
+      throw new Error('Invalid compiled browser dependency evidence: expected format1 and packages array')
+    }
+    const unknown = evidence.packages.filter(path => typeof path !== 'string' || !Object.hasOwn(lock.packages, path))
+    if (unknown.length) {
+      throw new Error('Invalid compiled browser dependency evidence: unknown identities: ' +
+        unknown.slice(0, 8).map(path => typeof path === 'string' && path.startsWith('node_modules/') && isNoticePath(path)
+          ? path
+          : '[invalid dependency identity]').join(', '))
+    }
+    if (new Set(evidence.packages).size !== evidence.packages.length) {
+      throw new Error('Invalid compiled browser dependency evidence: duplicate identities')
     }
     if (!bundled) bundled = new Set()
     for (const path of evidence.packages) bundled.add(path)
@@ -252,6 +260,15 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
       if (curated.status === 'upstream-declaration-only' && curated.sourceArchives.length) complete = true
       coverage = `compliance:${curated.status}`
     }
+    const preservedNotices = notices.map(notice => ({
+      ...(notice.file ? { path: notice.path, file: notice.file } : preserve(notice)),
+      ...(notice.capsule ? { capsule: notice.capsule } : {})
+    }))
+    const licenseSelection = requireCompliance && (lock.packages[key].dev !== true || bundled?.has(key)) && !curated?.sourceArchives.length
+      ? selectLicenseAlternative(manifest.license, notices.map((notice, index) => ({
+        file: preservedNotices[index].file, bytes: notice.bytes
+      })))
+      : null
     packages.push({
       path: key,
       name: manifest.name,
@@ -267,10 +284,8 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
         ? { noticeStatus: 'incomplete-build-only-notice-catalog' }
         : {}),
       packageJson: save(metadata, 'PACKAGE'),
-      notices: notices.map(notice => ({
-        ...(notice.file ? { path: notice.path, file: notice.file } : preserve(notice)),
-        ...(notice.capsule ? { capsule: notice.capsule } : {})
-      })),
+      notices: preservedNotices,
+      ...(licenseSelection ? { licenseSelection } : {}),
       ...(curated
         ? {
             upstreamStatus: curated.status,

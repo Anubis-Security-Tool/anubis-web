@@ -33,7 +33,7 @@ export function sourceInstallPlan ({
   }
   return [
     npmStep([
-      ...(options.packages.length ? ['install', '--no-save', '--package-lock=false', '--install-links'] : ['ci']),
+      ...(options.packages.length ? ['install', '--no-save', '--package-lock=true', '--install-links'] : ['ci']),
       '--include=dev', '--legacy-peer-deps', '--no-audit', '--no-fund', `--registry=${sourceRegistry}`,
       ...options.packages
     ]),
