@@ -20,11 +20,6 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
       !index.files || typeof index.files !== 'object') {
     throw new Error('Invalid third-party notice inventory')
   }
-  const missing = index.packages.filter(item => !item.complete)
-  if (missing.length) {
-    throw new Error('Unresolved original third-party licenses: ' +
-      missing.map(item => `${item.path}@${item.version} (${item.coverage})`).join(', '))
-  }
   if (requireCompliance && (index.compliance?.name !== '@ai-security-tool/third-party-compliance' ||
       index.compliance.version !== '1.0.1' || !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(index.compliance.integrity) ||
       !index.files[index.compliance.manifest])) {
@@ -45,24 +40,49 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
     throw new Error('Third-party notice file list is incomplete')
   }
   let bundled
-  if (index.bundleDependencies) {
-    if (!index.files[index.bundleDependencies]) throw new Error('Compiled browser dependency evidence is missing')
-    const bytes = await readFile(resolve(directory, index.bundleDependencies))
-    if (!bytes.equals(await readFile(resolve(directory, '..', 'browser-dependencies.json')))) {
-      throw new Error('Compiled browser dependency evidence differs from the original asset')
-    }
+  const recordBundle = bytes => {
     const evidence = JSON.parse(bytes.toString('utf8'))
     if (evidence.format !== 1 || !Array.isArray(evidence.packages) ||
         evidence.packages.some(path => !index.packages.some(item => item.path === path)) ||
         new Set(evidence.packages).size !== evidence.packages.length) {
       throw new Error('Invalid compiled browser dependency evidence')
     }
-    bundled = new Set(evidence.packages)
+    if (!bundled) bundled = new Set()
+    for (const path of evidence.packages) bundled.add(path)
+  }
+  if (index.bundleDependencies) {
+    if (!index.files[index.bundleDependencies]) throw new Error('Compiled browser dependency evidence is missing')
+    const bytes = await readFile(resolve(directory, index.bundleDependencies))
+    if (!bytes.equals(await readFile(resolve(directory, '..', 'browser-dependencies.json')))) {
+      throw new Error('Compiled browser dependency evidence differs from the original asset')
+    }
+    recordBundle(bytes)
   } else if (requireCompliance) {
     throw new Error('Compiled browser dependency evidence is required')
   }
+  if (index.additionalBundleDependencies !== undefined) {
+    if (!bundled || !Array.isArray(index.additionalBundleDependencies)) throw new Error('Invalid additional bundle evidence')
+    for (const file of index.additionalBundleDependencies) {
+      if (typeof file !== 'string' || !index.files[file]) throw new Error('Additional bundle evidence is missing')
+      recordBundle(await readFile(resolve(directory, file)))
+    }
+  }
+  for (const item of index.packages) {
+    if (bundled && item.bundled !== bundled.has(item.path)) {
+      throw new Error('Compiled browser dependency coverage differs from the original build evidence')
+    }
+    if (requireCompliance && typeof item.runtime !== 'boolean') {
+      throw new Error('Original runtime dependency classification is missing')
+    }
+  }
+  const catalogOnly = item => bundled !== undefined && item.runtime === false && item.bundled === false
+  const missing = index.packages.filter(item => !item.complete && !catalogOnly(item))
+  if (missing.length) {
+    throw new Error('Unresolved original third-party licenses: ' +
+      missing.map(item => `${item.path}@${item.version} (${item.coverage})`).join(', '))
+  }
   for (const item of [index.root, ...index.packages]) {
-    if (!item || !Array.isArray(item.notices) || !item.notices.length ||
+    if (!item || !Array.isArray(item.notices) || (!catalogOnly(item) && !item.notices.length) ||
         item.notices.some(notice => !index.files[notice.file])) {
       throw new Error('Third-party notice source has no preserved original')
     }
@@ -75,12 +95,6 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
     if (item.sharedUpstream && (!index.files[item.sharedUpstream.originalNotice] ||
         !index.files[item.sharedUpstream.registryIdentityProof])) {
       throw new Error('Shared upstream original notice provenance is missing')
-    }
-    if (item !== index.root && bundled && item.bundled !== bundled.has(item.path)) {
-      throw new Error('Compiled browser dependency coverage differs from the original build evidence')
-    }
-    if (requireCompliance && item !== index.root && typeof item.runtime !== 'boolean') {
-      throw new Error('Original runtime dependency classification is missing')
     }
     if (requireCompliance && (item.runtime || item.bundled) && /GPL|MPL/.test(item.license || '') && !item.sourceArchives?.length) {
       throw new Error(`Original third-party preferred source is required: ${item.name}`)

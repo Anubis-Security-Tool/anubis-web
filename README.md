@@ -60,11 +60,14 @@ npm run managed
 ```
 
 The installer runs locked `npm ci --include=dev --legacy-peer-deps` explicitly
-against `https://npm.anubis.locker/`, copies the published shared renderer through
-the normal install hook, builds the browser bundle, verifies the complete asset
-manifest and only then creates a private `.env` with unique strong
+against `https://npm.anubis.locker/`, explicitly runs the owned
+`node build/bin/install.js` renderer-copy hook after dependency validation,
+builds the browser bundle, verifies the complete asset manifest and only then
+creates a private `.env` with unique strong
 `SERVER_SECRET` / `SERVER_PASS`. It never starts a service or enrolls a device
 itself. An install, build or validation failure stops the sequence.
+The owned copy step also runs when npm suppresses install lifecycle scripts;
+it does not approve dependency scripts or change npm's script policy.
 
 From a combined source checkout, its bootstrap can invoke this same file by its
 path, for example `node web/scripts/install-source.js` from the root.
@@ -332,9 +335,9 @@ original relative paths, upstream archive integrities and byte-identical notices
 to content-addressed files. Nested/vendored licenses, attribution files and
 original READMEs are retained; fallback source headers remain original files,
 not rewritten license claims. A license name or link alone is not a substitute
-for complete original terms: unresolved entries fail the build and are listed
-in the inventory for review. Supplemental originals require an exact package
-version, upstream commit and checksum. The own-registry-pinned
+for complete original terms: unresolved runtime or bundled entries fail the
+build and are listed in the inventory for review. Supplemental originals require
+an exact package version, upstream commit and checksum. The own-registry-pinned
 `@ai-security-tool/third-party-compliance@1.0.1` capsule is copied in full,
 including its manifest, original supplemental notices, preferred source archives
 and rebuilding/relinking instructions. An explicitly recorded
@@ -350,20 +353,36 @@ Vite also emits `browser-dependencies.json` from its actual module graph,
 containing only normalized dependency identities, never local filesystem paths.
 The notice inventory preserves that evidence and records both bundled use and
 the locked production/runtime classification. GPL/LGPL/MPL preferred sources
-are required for runtime dependencies or code present in the browser graph,
+are required for runtime dependencies or code present in any collected graph,
 including the dev-dependency noVNC and SPICE libraries. Build-only compilers
 such as Lightning CSS retain their original notices and metadata; their native
 binaries/code are not shipped merely because the generated CSS is shipped.
 Missing bundle evidence or a classification that contradicts it fails the gate.
-The existing Vite/copy/collector sequence also supplies this evidence to native
-source builds using their own installation root and lock.
+Native source builds use their own installation root and lock and pass their
+actual native Vite proof alongside the embedded-browser proof:
+`collectThirdPartyNotices({root, assets, requireCompliance: true,
+additionalBundleManifests: [absoluteNativeProofPath]})`. The optional array
+defaults to empty; each additional regular file uses the same
+`{"format":1,"packages":["node_modules/package-name"]}` schema. All identities
+must match the installed/locked inventory. The collector preserves each proof
+byte-for-byte in a content-addressed file referenced by
+`index.additionalBundleDependencies`, without recording its absolute input path.
+Validation reconstructs the union of all proofs.
+
+An incomplete notice catalog is nonfatal only when the package is explicitly
+nonruntime and absent from every validated bundle graph. It remains
+`complete: false` with `noticeStatus: "incomplete-build-only-notice-catalog"`;
+its original metadata and all available notices are still preserved. This is
+not a blanket dev-dependency exemption, and unknown or contradictory use
+classification cannot qualify.
 
 The asset manifest includes this inventory and every preserved file, so neither
 Web packaging nor browser-asset staging can silently discard legal documents.
 Build, staging and prepack gates from `5.7.6` onward reject missing, modified or
-unresolved notice inventories. Existing production asset-integrity checks cover
-the preserved originals without changing server behavior. This does not rewrite published
-`5.7.5` packages or change the shared renderer's source bytes.
+unresolved runtime/bundled notice inventories. Existing production asset-integrity
+checks cover the preserved originals without changing server behavior.
+This does not rewrite published
+`5.7.5` or `5.7.6` packages or change the shared renderer's source bytes.
 Before upload or publication, CI reads both actual `npm pack` archives and
 verifies every asset and preserved original against the shared asset manifest;
 source-tree checks alone cannot hide files omitted by packaging filters.

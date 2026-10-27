@@ -38,6 +38,7 @@ export function sourceInstallPlan ({
       ...options.packages
     ]),
     { command: node, args: [resolve(root, 'scripts/install-source.js'), '--check-dependencies'] },
+    { command: node, args: [resolve(root, 'build/bin/install.js')] },
     npmStep(['run', 'build']),
     { command: node, args: [resolve(root, 'npm/anubis-web.js'), '--check'] },
     { command: node, args: [resolve(root, 'scripts/configure-managed.js')] }

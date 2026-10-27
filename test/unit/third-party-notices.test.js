@@ -263,6 +263,97 @@ test('records an explicit upstream declaration-only exception without fabricatin
   assert.equal((await readFile(join(assets, 'third-party', document.file), 'utf8')), '# Original upstream documentation\r\n')
 })
 
+test('native build-only notice gaps retain actual113 metadata without claiming103 provenance', async t => {
+  const context = await fixture(t)
+  const { root, assets, file } = context
+  await capsuleFixture(context)
+  const name = '@rolldown/binding-linux-x64-musl'
+  const key = `node_modules/${name}`
+  const metadataOnly = 'node_modules/app-builder-lib'
+  const lock = JSON.parse(await readFile(join(root, 'package-lock.json')))
+  lock.packages[key] = { version: '1.1.3', dev: true, integrity: 'sha512-' + Buffer.alloc(64, 9).toString('base64') }
+  lock.packages[metadataOnly] = { version: '26.15.7', dev: true }
+  await file('package-lock.json', JSON.stringify(lock))
+  const metadata = JSON.stringify({ name, version: '1.1.3', license: 'MIT' })
+  const readme = '# Actual optional compiler upstream documentation\n'
+  await file(`${key}/package.json`, metadata)
+  await file(`${key}/README.md`, readme)
+  await file(`${metadataOnly}/package.json`, '{"name":"app-builder-lib","version":"26.15.7","license":"MIT"}')
+  const index = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  for (const item of index.packages.filter(item => item.path === key || item.path === metadataOnly)) {
+    assert.equal(item.complete, false)
+    assert.equal(item.runtime, false)
+    assert.equal(item.bundled, false)
+    assert.equal(item.noticeStatus, 'incomplete-build-only-notice-catalog')
+    assert.equal(item.sharedUpstream, undefined)
+    assert.equal(item.upstreamStatus, undefined)
+    assert.deepEqual(await readFile(join(assets, 'third-party', item.packageJson)), await readFile(join(root, item.path, 'package.json')))
+  }
+  const binding = index.packages.find(item => item.path === key)
+  assert.equal(await readFile(join(assets, 'third-party', binding.notices[0].file), 'utf8'), readme)
+  assert.deepEqual(index.packages.find(item => item.path === metadataOnly).notices, [])
+  await verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true })
+  delete binding.runtime
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /runtime dependency classification is missing/)
+  lock.packages[key].dev = false
+  await file('package-lock.json', JSON.stringify(lock))
+  await assert.rejects(collectThirdPartyNotices({ root, assets, requireCompliance: true }), /Unresolved original.*binding-linux-x64-musl@1.1.3/)
+  lock.packages[key].dev = true
+  await file('package-lock.json', JSON.stringify(lock))
+  await file('dist/assets/browser-dependencies.json', JSON.stringify({ format: 1, packages: ['node_modules/example', key] }))
+  await assert.rejects(collectThirdPartyNotices({ root, assets, requireCompliance: true }), /Unresolved original.*binding-linux-x64-musl@1.1.3/)
+  const bundled = JSON.parse(await readFile(join(assets, 'third-party/index.json')))
+  bundled.packages.find(item => item.path === key).bundled = false
+  await file('dist/assets/third-party/index.json', JSON.stringify(bundled))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /differs from the original build evidence/)
+})
+
+test('native and browser module proofs form a validated union without changing the default collector API', async t => {
+  const context = await fixture(t)
+  const { root, assets, file } = context
+  await capsuleFixture(context)
+  const key = 'node_modules/native-library'
+  const lock = JSON.parse(await readFile(join(root, 'package-lock.json')))
+  lock.packages[key] = { version: '1.0.0', dev: true }
+  await file('package-lock.json', JSON.stringify(lock))
+  await file(`${key}/package.json`, '{"name":"native-library","version":"1.0.0","license":"MIT"}')
+  const catalog = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  assert.equal(catalog.packages.find(item => item.path === key).complete, false)
+  const nativeProof = join(root, 'native/browser-dependencies.json')
+  const bytes = Buffer.from('{\r\n  "format": 1,\r\n  "packages": ["node_modules/native-library"]\r\n}\r\n')
+  await file('native/browser-dependencies.json', bytes)
+  const options = { root, assets, requireCompliance: true, additionalBundleManifests: [nativeProof] }
+  await assert.rejects(collectThirdPartyNotices(options), /Unresolved original.*native-library@1.0.0/)
+  await file(`${key}/LICENSE`, original)
+  const index = await collectThirdPartyNotices(options)
+  const item = index.packages.find(item => item.path === key)
+  assert.equal(item.runtime, false)
+  assert.equal(item.bundled, true)
+  assert.equal(index.additionalBundleDependencies.length, 1)
+  assert.deepEqual(await readFile(join(assets, 'third-party', index.additionalBundleDependencies[0])), bytes)
+  await verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true })
+  item.license = 'MPL-2.0'
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /preferred source is required/)
+  item.license = 'MIT'
+  item.bundled = false
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /differs from the original build evidence/)
+  index.additionalBundleDependencies.push('PACKAGE-' + '0'.repeat(64) + '.json')
+  await file('dist/assets/third-party/index.json', JSON.stringify(index))
+  await assert.rejects(verifyThirdPartyNotices(join(assets, 'third-party'), { requireCompliance: true }), /Additional bundle evidence is missing/)
+  await assert.rejects(collectThirdPartyNotices({ ...options, additionalBundleManifests: ['relative.json'] }), /absolute proof-file paths/)
+  await assert.rejects(collectThirdPartyNotices({ ...options, additionalBundleManifests: [root] }), /regular file/)
+  await assert.rejects(collectThirdPartyNotices({ ...options, additionalBundleManifests: [join(root, 'missing-proof.json')] }), { code: 'ENOENT' })
+  await file('native/browser-dependencies.json', '{"format":1,"packages":["node_modules/unknown"]}')
+  await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
+  await file('native/browser-dependencies.json', '{"format":1,"packages":["node_modules/native-library","node_modules/native-library"]}')
+  await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
+  await file('native/browser-dependencies.json', '{"format":2,"packages":[]}')
+  await assert.rejects(collectThirdPartyNotices(options), /Invalid compiled browser dependency evidence/)
+})
+
 test('exact musl binding reuses its proven shared-project notice, never another version or integrity', async t => {
   const context = await fixture(t)
   const { root, assets, file } = context
@@ -305,7 +396,7 @@ test('exact musl binding reuses its proven shared-project notice, never another 
   lock.packages[key].version = '1.0.4'
   await file('package-lock.json', JSON.stringify(lock))
   await file(`${key}/package.json`, JSON.stringify({ name: proof.name, version: '1.0.4', license: proof.license }))
-  await assert.rejects(collectThirdPartyNotices({ root, assets }), /does not match the exact musl binding/)
+  await assert.rejects(collectThirdPartyNotices({ root, assets }), /Unresolved original.*binding-linux-x64-musl@1.0.4/)
 })
 
 test('576 build gates require the capsule and existing production integrity covers its originals', async t => {

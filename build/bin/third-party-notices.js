@@ -1,5 +1,5 @@
 import { lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { resolve, join, isAbsolute } from 'node:path'
 import { createHash } from 'node:crypto'
 import { isNoticePath, verifyThirdPartyNotices } from './verify-third-party-notices.js'
 import { treeManifest } from '../../src/app/common/asset-manifest.js'
@@ -113,7 +113,7 @@ export async function inspectPackageNotices (directory) {
   return { notices, coverage, complete: notices.some(notice => fullLicense.test(notice.bytes.toString('utf8'))) }
 }
 
-export async function collectThirdPartyNotices ({ root, assets, requireCompliance = false }) {
+export async function collectThirdPartyNotices ({ root, assets, requireCompliance = false, additionalBundleManifests = [] }) {
   const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'))
   const buffers = new Map()
   const files = {}
@@ -134,18 +134,35 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
   }
   let bundleDependencies
   let bundled
-  try {
-    const bytes = await readFile(resolve(assets, 'browser-dependencies.json'))
+  const recordBundle = bytes => {
     const evidence = JSON.parse(bytes)
     if (evidence.format !== 1 || !Array.isArray(evidence.packages) ||
         evidence.packages.some(path => typeof path !== 'string' || !lock.packages[path]) ||
         new Set(evidence.packages).size !== evidence.packages.length) {
       throw new Error('Invalid compiled browser dependency evidence')
     }
-    bundled = new Set(evidence.packages)
-    bundleDependencies = save(bytes, 'PACKAGE')
+    if (!bundled) bundled = new Set()
+    for (const path of evidence.packages) bundled.add(path)
+    return save(bytes, 'PACKAGE')
+  }
+  try {
+    const bytes = await readFile(resolve(assets, 'browser-dependencies.json'))
+    bundleDependencies = recordBundle(bytes)
   } catch (error) {
     if (error.code !== 'ENOENT' || requireCompliance) throw error
+  }
+  if (!Array.isArray(additionalBundleManifests) ||
+      additionalBundleManifests.some(path => typeof path !== 'string' || !isAbsolute(path))) {
+    throw new Error('Additional bundle manifests must be absolute proof-file paths')
+  }
+  if (additionalBundleManifests.length && !bundleDependencies) {
+    throw new Error('Additional bundle manifests require the original browser dependency evidence')
+  }
+  const additionalBundleDependencies = []
+  for (const path of additionalBundleManifests) {
+    const stat = await lstat(path)
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Additional bundle evidence must be a regular file')
+    additionalBundleDependencies.push(recordBundle(await readFile(path)))
   }
   const preserve = notice => ({ path: notice.path, file: save(notice.bytes, 'NOTICE') })
   const rootNotices = []
@@ -191,29 +208,31 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
     if (!curated && !complete && manifest.name === '@rolldown/binding-linux-x64-musl') {
       const bytes = await readFile(new URL('../notices/rolldown-musl-common-notice.json', import.meta.url))
       const proof = JSON.parse(bytes)
-      const original = compliance?.manifest.packages.find(item => item.name === proof.exactSameUpstreamCommitAsSupplement)
-      if (manifest.version !== proof.version || manifest.license !== proof.license ||
-          lock.packages[key].integrity !== proof.integrity || original?.version !== proof.version ||
-          original.license !== proof.license || original.upstream.commit !== proof.gitHead ||
-          original.upstream.repository !== 'https://github.com/rolldown/rolldown' ||
-          !original.noticeFiles.includes(proof.noticeFile)) {
-        throw new Error('Shared upstream original notice does not match the exact musl binding')
-      }
-      curated = {
-        name: proof.name,
-        version: proof.version,
-        license: proof.license,
-        registryIntegrity: proof.integrity,
-        upstream: original.upstream,
-        noticeFiles: [proof.noticeFile],
-        sourceArchives: [],
-        status: 'shared-upstream-original-notice'
-      }
-      sharedUpstream = {
-        package: original.name,
-        version: original.version,
-        originalNotice: 'compliance/' + proof.noticeFile,
-        registryIdentityProof: save(bytes, 'PACKAGE')
+      if (manifest.version === proof.version) {
+        const original = compliance?.manifest.packages.find(item => item.name === proof.exactSameUpstreamCommitAsSupplement)
+        if (manifest.license !== proof.license ||
+            lock.packages[key].integrity !== proof.integrity || original?.version !== proof.version ||
+            original.license !== proof.license || original.upstream.commit !== proof.gitHead ||
+            original.upstream.repository !== 'https://github.com/rolldown/rolldown' ||
+            !original.noticeFiles.includes(proof.noticeFile)) {
+          throw new Error('Shared upstream original notice does not match the exact musl binding')
+        }
+        curated = {
+          name: proof.name,
+          version: proof.version,
+          license: proof.license,
+          registryIntegrity: proof.integrity,
+          upstream: original.upstream,
+          noticeFiles: [proof.noticeFile],
+          sourceArchives: [],
+          status: 'shared-upstream-original-notice'
+        }
+        sharedUpstream = {
+          package: original.name,
+          version: original.version,
+          originalNotice: 'compliance/' + proof.noticeFile,
+          registryIdentityProof: save(bytes, 'PACKAGE')
+        }
       }
     }
     if (curated) {
@@ -244,6 +263,9 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
       complete,
       runtime: lock.packages[key].dev !== true,
       ...(bundled ? { bundled: bundled.has(key) } : {}),
+      ...(!complete && lock.packages[key].dev === true && bundled && !bundled.has(key)
+        ? { noticeStatus: 'incomplete-build-only-notice-catalog' }
+        : {}),
       packageJson: save(metadata, 'PACKAGE'),
       notices: notices.map(notice => ({
         ...(notice.file ? { path: notice.path, file: notice.file } : preserve(notice)),
@@ -264,6 +286,9 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
     root: { notices: rootNotices.map(preserve) },
     packages,
     ...(bundleDependencies ? { bundleDependencies } : {}),
+    ...(additionalBundleDependencies.length
+      ? { additionalBundleDependencies: [...new Set(additionalBundleDependencies)].sort() }
+      : {}),
     ...(compliance
       ? {
           compliance: {

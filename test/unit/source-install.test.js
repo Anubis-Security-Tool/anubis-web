@@ -8,21 +8,23 @@ import { fileURLToPath } from 'node:url'
 import { sourceInstallPlan, installSource, sourceRoot } from '../../scripts/install-source.js'
 import { configureManagedInstallation } from '../../scripts/configure-managed.js'
 import { gzipSync } from 'node:zlib'
+import { readFileSync, existsSync } from 'node:fs'
 
 const quiet = { info () {} }
 
 test('source install is root-location independent, locked and does not start or enroll a server', () => {
   const root = resolve(tmpdir(), 'anubis source with spaces')
   const plan = sourceInstallPlan({ root, platform: 'linux', env: {}, nodeVersion: '24.0.0' })
-  assert.equal(plan.length, 5)
+  assert.equal(plan.length, 6)
   assert.deepEqual(plan[0].args, [
     'ci', '--include=dev', '--legacy-peer-deps', '--no-audit', '--no-fund',
     '--registry=https://npm.anubis.locker/'
   ])
   assert.deepEqual(plan[1].args, [resolve(root, 'scripts/install-source.js'), '--check-dependencies'])
-  assert.deepEqual(plan[2].args, ['run', 'build'])
-  assert.deepEqual(plan[3].args, [resolve(root, 'npm/anubis-web.js'), '--check'])
-  assert.deepEqual(plan[4].args, [resolve(root, 'scripts/configure-managed.js')])
+  assert.deepEqual(plan[2].args, [resolve(root, 'build/bin/install.js')])
+  assert.deepEqual(plan[3].args, ['run', 'build'])
+  assert.deepEqual(plan[4].args, [resolve(root, 'npm/anubis-web.js'), '--check'])
+  assert.deepEqual(plan[5].args, [resolve(root, 'scripts/configure-managed.js')])
   for (const step of plan) {
     assert.equal(step.cwd, root)
     assert.equal(step.env.ANUBIS_WEB_HOME, root)
@@ -53,11 +55,11 @@ test('Windows uses Node and npm-cli directly without a command shell or interpol
       assert.ok(Array.isArray(args))
     }
   })
-  assert.equal(count, 5)
+  assert.equal(count, 6)
 })
 
 test('installation errors stop immediately before later build, check or configuration stages', () => {
-  for (let failure = 0; failure < 5; failure++) {
+  for (let failure = 0; failure < 6; failure++) {
     let count = 0
     assert.throws(() => installSource({
       platform: 'linux',
@@ -70,6 +72,46 @@ test('installation errors stop immediately before later build, check or configur
     }), /fixture-stage-failed/)
     assert.equal(count, failure + 1)
   }
+})
+
+test('explicit owned renderer copying runs before build when npm lifecycle scripts are disabled', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'anubis-hook-disabled-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  for (const name of [
+    'build/bin', 'src/client/entry-web',
+    'node_modules/@ai-security-tool/electerm-react/client/common',
+    'node_modules/@ai-security-tool/electerm-react/app/common'
+  ]) await mkdir(join(root, name), { recursive: true })
+  await writeFile(join(root, 'package.json'), '{"type":"module"}')
+  await copyFile(resolve(sourceRoot, 'build/bin/install.js'), join(root, 'build/bin/install.js'))
+  const entry = "export { parseVv } from '../../app/common/parse-vv.mjs'\n"
+  const shared = 'export const parseVv = text => text\n'
+  await writeFile(join(root, 'node_modules/@ai-security-tool/electerm-react/client/common/parse-vv.js'), entry)
+  await writeFile(join(root, 'node_modules/@ai-security-tool/electerm-react/app/common/parse-vv.mjs'), shared)
+  let copied = false
+  let built = false
+  installSource({
+    root,
+    platform: 'linux',
+    nodeVersion: '24.0.0',
+    env: { npm_config_ignore_scripts: 'true' },
+    log: quiet,
+    run (command, args, options) {
+      assert.equal(options.env.npm_config_ignore_scripts, 'true')
+      assert.equal(args.some(arg => arg.includes('allow-scripts')), false)
+      if (args[0] === join(root, 'build/bin/install.js')) {
+        execFileSync(command, args, { cwd: root, env: options.env })
+        copied = true
+      } else if (args[0] === 'run' && args[1] === 'build') {
+        assert.equal(copied, true)
+        assert.equal(readFileSync(join(root, 'src/client/electerm-react/common/parse-vv.js'), 'utf8'), entry)
+        assert.equal(readFileSync(join(root, 'src/client/app/common/parse-vv.mjs'), 'utf8'), shared)
+        built = true
+      }
+    }
+  })
+  assert.equal(built, true)
+  assert.equal(existsSync(join(root, '.env')), false)
 })
 
 test('Node preflight and unsupported arguments fail before launching npm', () => {
@@ -85,7 +127,7 @@ test('standalone installer environment generates strong private settings and pre
   const plan = sourceInstallPlan({
     root, platform: 'linux', env: {}, nodeVersion: '24.0.0', args: ['--standalone']
   })
-  await configureManagedInstallation({ directory: root, env: plan[4].env, log: quiet })
+  await configureManagedInstallation({ directory: root, env: plan.at(-1).env, log: quiet })
   const original = await readFile(join(root, '.env'), 'utf8')
   assert.match(original, /^ANUBIS_MANAGED_ACCESS=0$/m)
   assert.match(original, /^ENABLE_AUTH=1$/m)
@@ -146,7 +188,7 @@ test('explicit local source tarballs require exact names/versions and do not rew
   assert.ok(plan[0].args.includes('--package-lock=false'))
   assert.ok(plan[0].args.includes('--registry=https://npm.anubis.locker/'))
   assert.deepEqual(plan[0].args.slice(-3), [renderer, sdk, resource])
-  assert.equal(plan[4].env.ANUBIS_MANAGED_ACCESS, '0')
+  assert.equal(plan.at(-1).env.ANUBIS_MANAGED_ACCESS, '0')
   assert.equal(await readFile(join(root, 'package-lock.json'), 'utf8'), 'preserved-lock')
   assert.deepEqual(JSON.parse(await readFile(join(root, 'package.json'))), manifest)
 })
