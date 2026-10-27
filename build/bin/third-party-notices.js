@@ -171,7 +171,36 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
       throw new Error(`Installed dependency differs from the notice source lock: ${key}`)
     }
     let { notices, coverage, complete } = await inspectPackageNotices(directory)
-    const curated = compliance?.manifest.packages.find(item => item.name === manifest.name && item.version === manifest.version)
+    let curated = compliance?.manifest.packages.find(item => item.name === manifest.name && item.version === manifest.version)
+    let sharedUpstream
+    if (!curated && !complete && manifest.name === '@rolldown/binding-linux-x64-musl') {
+      const bytes = await readFile(new URL('../notices/rolldown-musl-common-notice.json', import.meta.url))
+      const proof = JSON.parse(bytes)
+      const original = compliance?.manifest.packages.find(item => item.name === proof.exactSameUpstreamCommitAsSupplement)
+      if (manifest.version !== proof.version || manifest.license !== proof.license ||
+          lock.packages[key].integrity !== proof.integrity || original?.version !== proof.version ||
+          original.license !== proof.license || original.upstream.commit !== proof.gitHead ||
+          original.upstream.repository !== 'https://github.com/rolldown/rolldown' ||
+          !original.noticeFiles.includes(proof.noticeFile)) {
+        throw new Error('Shared upstream original notice does not match the exact musl binding')
+      }
+      curated = {
+        name: proof.name,
+        version: proof.version,
+        license: proof.license,
+        registryIntegrity: proof.integrity,
+        upstream: original.upstream,
+        noticeFiles: [proof.noticeFile],
+        sourceArchives: [],
+        status: 'shared-upstream-original-notice'
+      }
+      sharedUpstream = {
+        package: original.name,
+        version: original.version,
+        originalNotice: 'compliance/' + proof.noticeFile,
+        registryIdentityProof: save(bytes, 'PACKAGE')
+      }
+    }
     if (curated) {
       if (curated.registryIntegrity !== lock.packages[key].integrity || curated.license !== manifest.license) {
         throw new Error(`Compliance material differs from the accepted package: ${key}`)
@@ -209,7 +238,8 @@ export async function collectThirdPartyNotices ({ root, assets, requireComplianc
             upstream: curated.upstream,
             sourceArchives: curated.sourceArchives.map(path => 'compliance/' + path)
           }
-        : {})
+        : {}),
+      ...(sharedUpstream ? { sharedUpstream } : {})
     })
   }
   const index = {

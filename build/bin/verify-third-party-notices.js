@@ -55,6 +55,10 @@ export async function verifyThirdPartyNotices (directory, { requireCompliance = 
     if (item.sourceArchives?.some(path => !index.files[path])) {
       throw new Error('Original third-party preferred source is missing')
     }
+    if (item.sharedUpstream && (!index.files[item.sharedUpstream.originalNotice] ||
+        !index.files[item.sharedUpstream.registryIdentityProof])) {
+      throw new Error('Shared upstream original notice provenance is missing')
+    }
     if (requireCompliance && /GPL|MPL/.test(item.license || '') && !item.sourceArchives?.length) {
       throw new Error(`Original third-party preferred source is required: ${item.name}`)
     }

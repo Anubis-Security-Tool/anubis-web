@@ -340,6 +340,11 @@ including its manifest, original supplemental notices, preferred source archives
 and rebuilding/relinking instructions. An explicitly recorded
 `upstream-declaration-only` exception preserves the upstream declaration and
 exact source instead of inventing an upstream copyright or license grant.
+The exact optional Rolldown Linux-musl `1.0.3` binding also retains its original
+metadata/README and the capsule's original GNU-platform notice: its pinned
+registry integrity and upstream project commit prove that the same project
+license applies. This bounded relation is recorded in the inventory and does
+not permit another version, integrity or an unrelated missing license.
 
 The asset manifest includes this inventory and every preserved file, so neither
 Web packaging nor browser-asset staging can silently discard legal documents.

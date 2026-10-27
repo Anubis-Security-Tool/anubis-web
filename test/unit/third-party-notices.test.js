@@ -203,6 +203,51 @@ test('records an explicit upstream declaration-only exception without fabricatin
   assert.equal((await readFile(join(assets, 'third-party', document.file), 'utf8')), '# Original upstream documentation\r\n')
 })
 
+test('exact musl binding reuses its proven shared-project notice, never another version or integrity', async t => {
+  const context = await fixture(t)
+  const { root, assets, file } = context
+  const { directory, manifest } = await capsuleFixture(context)
+  const proof = JSON.parse(await readFile(new URL('../../build/notices/rolldown-musl-common-notice.json', import.meta.url)))
+  const notice = proof.noticeFile
+  manifest.files.push({ path: notice, bytes: original.length, sha256: hash(original) })
+  manifest.packages.push({
+    name: proof.exactSameUpstreamCommitAsSupplement,
+    version: proof.version,
+    license: proof.license,
+    registryIntegrity: 'sha512-' + Buffer.alloc(64, 3).toString('base64'),
+    upstream: { repository: 'https://github.com/rolldown/rolldown', commit: proof.gitHead },
+    noticeFiles: [notice],
+    sourceArchives: [],
+    status: 'original-source-notice'
+  })
+  await file(`${directory}/${notice}`, original)
+  await file(`${directory}/manifest.json`, JSON.stringify(manifest))
+  const key = `node_modules/${proof.name}`
+  const lock = JSON.parse(await readFile(join(root, 'package-lock.json')))
+  lock.packages[key] = { version: proof.version, integrity: proof.integrity }
+  await file('package-lock.json', JSON.stringify(lock))
+  await file(`${key}/package.json`, JSON.stringify({ name: proof.name, version: proof.version, license: proof.license }))
+  const readme = '# Original optional musl compiler binding\n'
+  await file(`${key}/README.md`, readme)
+  const index = await collectThirdPartyNotices({ root, assets, requireCompliance: true })
+  const binding = index.packages.find(item => item.name === proof.name)
+  assert.equal(binding.upstreamStatus, 'shared-upstream-original-notice')
+  assert.equal(binding.upstream.commit, proof.gitHead)
+  assert.equal(binding.sharedUpstream.package, proof.exactSameUpstreamCommitAsSupplement)
+  const savedReadme = binding.notices.find(item => item.path === 'README.md')
+  assert.equal(await readFile(join(assets, 'third-party', savedReadme.file), 'utf8'), readme)
+  assert.deepEqual(await readFile(join(assets, 'third-party', binding.sharedUpstream.registryIdentityProof)),
+    await readFile(new URL('../../build/notices/rolldown-musl-common-notice.json', import.meta.url)))
+  lock.packages[key].integrity = 'sha512-' + Buffer.alloc(64, 4).toString('base64')
+  await file('package-lock.json', JSON.stringify(lock))
+  await assert.rejects(collectThirdPartyNotices({ root, assets }), /does not match the exact musl binding/)
+  lock.packages[key].integrity = proof.integrity
+  lock.packages[key].version = '1.0.4'
+  await file('package-lock.json', JSON.stringify(lock))
+  await file(`${key}/package.json`, JSON.stringify({ name: proof.name, version: '1.0.4', license: proof.license }))
+  await assert.rejects(collectThirdPartyNotices({ root, assets }), /does not match the exact musl binding/)
+})
+
 test('576 build gates require the capsule and existing production integrity covers its originals', async t => {
   const context = await fixture(t)
   const { root, assets, file } = context

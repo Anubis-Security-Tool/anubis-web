@@ -1,0 +1,14 @@
+{
+  "name": "@rolldown/binding-linux-x64-musl",
+  "version": "1.0.3",
+  "license": "MIT",
+  "gitHead": "a287faaa3db70e9e4145b6bc16567f596a3c2e1f",
+  "repository": {
+    "url": "git+https://github.com/rolldown/rolldown.git",
+    "type": "git",
+    "directory": "packages/rolldown"
+  },
+  "integrity": "sha512-pSdpdUJHkuCxun9LE7jvgUB9qsRgaiyNNCX7m/AvHTcq67AiT/Yhoxvw5zPfhrM8k/BfP8ce/hMOpthKDpEUow==",
+  "exactSameUpstreamCommitAsSupplement": "@rolldown/binding-linux-x64-gnu",
+  "noticeFile": "notices/rolldown__binding-linux-x64-gnu-1.0.3/upstream/LICENSE"
+}
